@@ -168,7 +168,7 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	    DictionaryCompressionStorage::InitCompression, DictionaryCompressionStorage::Compress,
 	    DictionaryCompressionStorage::FinalizeCompress, DictionaryCompressionStorage::StringInitScan,
 	    DictionaryCompressionStorage::StringScan, DictionaryCompressionStorage::StringScanPartial<false>,
-	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
+	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip, nullptr, 
 	    UncompressedStringStorage::StringInitSegment);
 }
 

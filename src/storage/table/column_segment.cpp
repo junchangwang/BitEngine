@@ -163,6 +163,11 @@ void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 	                         result, result_idx);
 }
 
+void ColumnSegment::FetchRowsInSeg(ColumnFetchState &state, vector<row_t> &row_ids, Vector &result,
+	idx_t result_offset) {
+	function.get().fetch_rows_in_seg(*this, state, row_ids, result, result_offset);
+}
+
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//

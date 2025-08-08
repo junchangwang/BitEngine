@@ -4,6 +4,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "execution/tpch/bitmap_table_scan.hpp"
+#include "include/bmtpch_constants.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 
 #include <utility>
 
@@ -98,6 +101,39 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	D_ASSERT(!column_ids.empty());
 	auto &g_state = input.global_state.Cast<TableScanGlobalSourceState>();
 	auto &l_state = input.local_state.Cast<TableScanLocalSourceState>();
+	
+	if(context.client.query_source == "bm_tpch") {
+		static BMTableScan bm_table_scan;
+		
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q01) {
+			bm_table_scan.BMTPCH_Q1(context, *this);
+			context.client.query_source = "tpch";
+		}
+		// if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q01 && 
+		// 	bind_data.get()->Cast<TableScanBindData>().table.name == "lineitem") {
+
+		// 	SourceResultType res = bm_table_scan.BMTPCH_Q1(context, chunk, bind_data.get()->Cast<TableScanBindData>());
+		// 	return res;
+		// }
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q05 && 
+			bind_data.get()->Cast<TableScanBindData>().table.name == "orders") {
+
+			SourceResultType res = bm_table_scan.BMTPCH_Q5(context, chunk, bind_data.get()->Cast<TableScanBindData>());
+			return res;
+		}
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q06 && 
+			bind_data.get()->Cast<TableScanBindData>().table.name == "lineitem") {
+
+			SourceResultType res = bm_table_scan.BMTPCH_Q6(context, chunk, bind_data.get()->Cast<TableScanBindData>());
+			return res;
+		}
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q14 && 
+			bind_data.get()->Cast<TableScanBindData>().table.name == "lineitem") {
+
+			SourceResultType res = bm_table_scan.BMTPCH_Q14(context, chunk, bind_data.get()->Cast<TableScanBindData>());
+			return res;
+		}
+	}											
 
 	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
 

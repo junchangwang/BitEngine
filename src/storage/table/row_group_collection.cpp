@@ -279,30 +279,88 @@ bool RowGroupCollection::Scan(DuckTransaction &transaction, const std::function<
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
+// void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
+//                                const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
+// 	// figure out which row_group to fetch from
+// 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
+// 	idx_t count = 0;
+// 	for (idx_t i = 0; i < fetch_count; i++) {
+// 		auto row_id = row_ids[i];
+// 		RowGroup *row_group;
+// 		{
+// 			idx_t segment_index;
+// 			auto l = row_groups->Lock();
+// 			if (!row_groups->TryGetSegmentIndex(l, UnsafeNumericCast<idx_t>(row_id), segment_index)) {
+// 				// in parallel append scenarios it is possible for the row_id
+// 				continue;
+// 			}
+// 			row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
+// 		}
+// 		if (!row_group->Fetch(transaction, UnsafeNumericCast<idx_t>(row_id) - row_group->start)) {
+// 			continue;
+// 		}
+// 		row_group->FetchRow(transaction, state, column_ids, row_id, result, count);
+// 		count++;
+// 	}
+// 	result.SetCardinality(count);
+// }
+
 void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
-                               const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
-	// figure out which row_group to fetch from
+							   const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
+// figure out which row_group to fetch from
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-	idx_t count = 0;
-	for (idx_t i = 0; i < fetch_count; i++) {
-		auto row_id = row_ids[i];
-		RowGroup *row_group;
-		{
-			idx_t segment_index;
-			auto l = row_groups->Lock();
-			if (!row_groups->TryGetSegmentIndex(l, UnsafeNumericCast<idx_t>(row_id), segment_index)) {
+	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		idx_t row_idx = 0;
+		idx_t count = 0;
+		idx_t result_offset = 0;
+		vector<row_t> segment_row_ids;
+		while (row_idx < fetch_count) {
+			segment_row_ids.clear();
+			auto row_id = row_ids[row_idx];
+			segment_row_ids.push_back(row_id);
+
+			if (row_id >= 59986052) {
+				break;
+			}
+
+			RowGroup *row_group;
+			{
+				idx_t segment_index;
+				// TODO: get rid of mutex lock?
+				auto l = row_groups->Lock();
+				if (!row_groups->TryGetSegmentIndex(l, row_id, segment_index)) {
 				// in parallel append scenarios it is possible for the row_id
 				continue;
+				}
+				row_group = row_groups->GetSegmentByIndex(l, segment_index);
 			}
-			row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
+			if (!row_group->Fetch(transaction, row_id - row_group->start)) {
+				continue;
+			}
+
+			auto &col_data = row_group->GetColumn(column_ids[col_idx]);
+			idx_t col_end = col_data.start + col_data.count;
+			auto segment = col_data.data.GetSegment(row_id);
+
+			idx_t idx_ahead = row_idx + 1;
+			while (idx_ahead < fetch_count && row_ids[idx_ahead] < col_end) {
+				auto segment_ahead = col_data.data.GetSegment(row_ids[idx_ahead]);
+			if (segment_ahead == segment) {
+				segment_row_ids.push_back(row_ids[idx_ahead]);
+			} else {
+				break;
+			}
+				idx_ahead++;
+			}
+			row_idx = idx_ahead;
+
+			segment->FetchRowsInSeg(state, segment_row_ids, result.data[col_idx], result_offset);
+
+			result_offset += segment_row_ids.size();
+			count += segment_row_ids.size();
 		}
-		if (!row_group->Fetch(transaction, UnsafeNumericCast<idx_t>(row_id) - row_group->start)) {
-			continue;
-		}
-		row_group->FetchRow(transaction, state, column_ids, row_id, result, count);
-		count++;
+		result.SetCardinality(count);
 	}
-	result.SetCardinality(count);
 }
 
 //===--------------------------------------------------------------------===//

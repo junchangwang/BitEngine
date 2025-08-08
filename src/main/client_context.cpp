@@ -44,6 +44,11 @@
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/logging/log_type.hpp"
+#include "bitmaps/rabit/table.h"
+#include <iostream>
+#include <fstream>
+#include <unistd.h>
+#include "fastbit/table.h"
 
 namespace duckdb {
 
@@ -137,6 +142,112 @@ struct DebugClientContextState : public ClientContextState {
 #endif
 };
 #endif
+
+int ClientContext::sf = 10;
+Table_config *ClientContext::Make_Config(std::string name, int cardinality, bool is_lazyload, Index_encoding encoding, int group_length) {
+	Table_config *config = new Table_config {};
+	config->n_workers = 1;
+	config->DATA_PATH = "";
+	std::string global_path = "/usr/local/dataset/DuckDB/";
+	std::string path = "bm_";
+	path.append(to_string((int)(1500000 * sf)));
+	path.append("_");
+	path.append(name);
+	if(access(path.c_str(), F_OK) == -1) {
+		path = global_path + path;
+	}
+	config->INDEX_PATH = path;
+	// config->n_rows = n_rows;
+	config->g_cardinality = cardinality;
+	enable_fence_pointer = config->enable_fence_pointer = true;
+	INDEX_WORDS = 10000; // Fence length
+	config->approach = "rabit";
+	config->encoding = encoding;
+	config->nThreads_for_getval = 4;
+	config->show_memory = true;
+	config->on_disk = false;
+	config->showEB = false;
+	config->decode = false;
+
+	// DBx1000 doesn't use the following parameters;
+	// they are used by nicolas.
+	config->n_queries = 100;
+	config->n_udis = 0;
+	config->verbose = false;
+	config->time_out = 100;
+	config->autoCommit = true;
+	config->n_merge_threshold = 16;
+	config->db_control = false;
+
+	config->segmented_btv = true;
+	config->encoded_word_len = 31;
+	// TODO: seg number?
+	config->rows_per_seg = 1000000;
+	config->enable_parallel_cnt = false;
+
+	config->is_lazyload = is_lazyload;
+
+	config->GE_group_len = group_length;
+	if(config->encoding == GE) {
+		// find directory name for group encoding
+		path.append("_GE_");
+		path.append(to_string(group_length));
+		config->GROUP_PATH = path;
+	}
+
+	return config;
+}
+
+int ClientContext::Read_BM(Table_config *config, BaseTable **basetable, uint64_t fixed_rows) {
+
+	if (!config->INDEX_PATH.empty()) {
+		// Check whether the index has been built before.
+		std::fstream done;
+		uint64_t n_rows = 0;
+		std::string path = "bm_";
+		path.append(to_string((int)(1500000 * sf)));
+		path.append("_");
+		std::string prepath = path;
+		path.append("done");
+		std::cout << path << std::endl;
+		done.open(path, std::ios::in);
+		if (done.is_open()) {
+			done >> n_rows;
+			done.close();
+		} else {
+			std::cout << ".bm is not ready" << std::endl;
+			return -1;
+		}
+
+		if(fixed_rows)
+			n_rows = fixed_rows;
+
+		config->n_rows = n_rows;
+		auto rabitbitmap = new rabit::Rabit(config);
+		*basetable = rabitbitmap;
+		/*
+		if(config->segmented_btv) {
+			uint64_t n_seg = rabitbitmap->Btvs[0]->seg_btv->seg_table.size();
+			for(int i = 0; i < rabitbitmap->config->g_cardinality; i++) {
+				for(int j = 0; j < n_seg; j++) {
+					auto &seg = rabitbitmap->Btvs[i]->seg_btv->seg_table.find(j)->second;
+					seg->btv->decompress();
+				}
+			}
+		}
+		if(decompress) {
+			for(int i = 0; i < rabitbitmap->config->g_cardinality; i++) {
+				rabitbitmap->Btvs[i]->btv->decompress();
+			}
+		}
+		*/
+
+		std::cout << config->INDEX_PATH << " : read bm successfully" << std::endl;
+		return 0;
+	}
+	std::cout << "no index path" << std::endl;
+	return -1;
+}
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : db(std::move(database)), interrupted(false), transaction(*this), connection_id(DConstants::INVALID_INDEX) {

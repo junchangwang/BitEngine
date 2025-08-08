@@ -29,6 +29,10 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "fastbit/bitvector.h"
+#include "bitmaps/base_table.h"
+#include "utils/util.h"
+#include "fastbit/table.h"
 
 namespace duckdb {
 class Appender;
@@ -89,6 +93,25 @@ public:
 	//! Data for the currently running transaction
 	TransactionContext transaction;
 
+	static int sf;
+	BaseTable *bitmap_shipdate;
+	BaseTable *bitmap_discount;
+	BaseTable *bitmap_quantity;
+	BaseTable *bitmap_orderkey;
+	BaseTable *bitmap_orderdate;
+	BaseTable *bitmap_linestatus;
+	BaseTable *bitmap_returnflag;
+	BaseTable *bitmap_suppkey;
+	BaseTable *bitmap_partkey;
+	BaseTable *bitmap_shipmode;
+	BaseTable *bitmap_shipinstruct;
+	BaseTable *bitmap_o_orderkey;
+	BaseTable *bitmap_receiptdate;
+	vector<int64_t> q12_orderkey;
+	vector<int64_t> q18_orderkey;
+
+	std::string query_source = "tpch";
+
 public:
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
@@ -102,6 +125,9 @@ public:
 	DUCKDB_API void EnableProfiling();
 	//! Disable query profiling
 	DUCKDB_API void DisableProfiling();
+
+	Table_config *Make_Config(string name, int cardinality = 0, bool is_lazyload = false, Index_encoding encoding = Index_encoding::EE, int group_length = 0);
+	int Read_BM(Table_config *config, BaseTable **basebitmap, uint64_t fixed_rows = 0);
 
 	//! Issue a query, returning a QueryResult. The QueryResult can be either a StreamQueryResult or a
 	//! MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT

@@ -6,6 +6,21 @@ endif()
 
 add_extension_definitions()
 
+find_library(URCU_LIBRARIES 
+		NAMES urcu
+		HINTS "/usr/lib/x86_64-linux-gnu")
+
+Set(BOOST_LIBRARYDIR /usr/lib/x86_64-linux-gnu)
+set(BOOST_INCLUDEDIR /usr/include)
+set(Boost_NO_SYSTEM_PATHS on)  
+#set(URCU_LIBRARIES /usr/lib/x86_64-linux-gnu/liburcu.so)
+find_package(Boost COMPONENTS filesystem program_options system REQUIRED)
+INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
+#MESSAGE( FATAL_ERROR "${Boost_LIBRARIES}     dic: ${Boost_LIBRARY_DIRS}  ${Boost_INCLUDE_DIRS} ${URCU_LIBRARIES}")
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../extension/debit/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../extension/debit/dbgen)
+
 if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG
       "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move"
@@ -38,24 +53,8 @@ if(MSVC)
 endif()
 
 if(MSVC)
-  add_compile_options("/bigobj")
+  add_definitions(/bigobj)
 endif()
-
-function(ensure_variable_is_number INPUT_VERSION OUT_RESULT)
-  if(NOT "${${INPUT_VERSION}}" MATCHES "^[0-9]+$")
-    message(
-      WARNING
-        "VERSION PARAMETER ${INPUT_VERSION} \"${${INPUT_VERSION}}\" IS NOT A NUMBER - SETTING TO 0"
-    )
-    set(${OUT_RESULT}
-        0
-        PARENT_SCOPE)
-  else()
-    set(${OUT_RESULT}
-        ${${INPUT_VERSION}}
-        PARENT_SCOPE)
-  endif()
-endfunction()
 
 if(AMALGAMATION_BUILD)
 
@@ -83,6 +82,9 @@ else()
   add_subdirectory(optimizer)
   add_subdirectory(planner)
   add_subdirectory(parser)
+  if(${BUILD_CORE_FUNCTIONS_EXTENSION})
+    add_subdirectory(core_functions)
+  endif()
   add_subdirectory(function)
   add_subdirectory(catalog)
   add_subdirectory(common)
@@ -107,36 +109,16 @@ else()
       duckdb_skiplistlib
       duckdb_mbedtls
       duckdb_yyjson
-      duckdb_zstd)
+      duckdb_zstd
+      ${CMAKE_CURRENT_SOURCE_DIR}/../extension/debit/CUBIT-dev/build/libbitmap.a)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
-
-  if(WIN32 AND NOT MINGW)
-    ensure_variable_is_number(DUCKDB_MAJOR_VERSION RC_MAJOR_VERSION)
-    ensure_variable_is_number(DUCKDB_MINOR_VERSION RC_MINOR_VERSION)
-    ensure_variable_is_number(DUCKDB_PATCH_VERSION RC_PATCH_VERSION)
-    ensure_variable_is_number(DUCKDB_DEV_ITERATION RC_DEV_ITERATION)
-
-    set(CMAKE_RC_FLAGS
-        "${CMAKE_RC_FLAGS} -D DUCKDB_VERSION=\"${DUCKDB_VERSION}\"")
-    set(CMAKE_RC_FLAGS
-        "${CMAKE_RC_FLAGS} -D DUCKDB_MAJOR_VERSION=\"${RC_MAJOR_VERSION}\"")
-    set(CMAKE_RC_FLAGS
-        "${CMAKE_RC_FLAGS} -D DUCKDB_MINOR_VERSION=\"${RC_MINOR_VERSION}\"")
-    set(CMAKE_RC_FLAGS
-        "${CMAKE_RC_FLAGS} -D DUCKDB_PATCH_VERSION=\"${RC_PATCH_VERSION}\"")
-    set(CMAKE_RC_FLAGS
-        "${CMAKE_RC_FLAGS} -D DUCKDB_DEV_ITERATION=\"${RC_DEV_ITERATION}\"")
-
-    target_sources(duckdb PRIVATE version.rc)
-  endif()
-
-  target_link_libraries(duckdb PUBLIC ${DUCKDB_LINK_LIBS})
+  target_link_libraries(duckdb PUBLIC ${DUCKDB_LINK_LIBS} pthread atomic ${Boost_LIBRARIES} ${URCU_LIBRARIES})
   link_threads(duckdb PUBLIC)
   link_extension_libraries(duckdb PRIVATE)
 
   add_library(duckdb_static STATIC ${ALL_OBJECT_FILES})
-  target_link_libraries(duckdb_static PUBLIC ${DUCKDB_LINK_LIBS})
+  target_link_libraries(duckdb_static PUBLIC ${DUCKDB_LINK_LIBS} pthread atomic  ${Boost_LIBRARIES} ${URCU_LIBRARIES})
   link_threads(duckdb_static PUBLIC)
   link_extension_libraries(duckdb_static PUBLIC)
 
