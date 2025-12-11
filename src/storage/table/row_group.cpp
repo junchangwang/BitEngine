@@ -23,7 +23,7 @@
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
-
+#include "execution/tpch/bitmap_table_scan.hpp"
 namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t start, idx_t count)
@@ -498,6 +498,43 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	return true;
 }
 
+void AppendSelVectorToGlobal(const sel_t *sel_vector, idx_t count, idx_t rowid_base) {
+    for (idx_t i = 0; i < count; ++i) {
+        g_idlist.push_back(rowid_base + sel_vector[i]);
+    }
+	sizes.push_back(count);
+
+}
+
+void SelectiveGatherInChunk(DataChunk &result, const sel_t *sel_vector, idx_t fetch_count, idx_t approved_tuple_count) {
+	UnifiedVectorFormat extendedprice;
+	UnifiedVectorFormat discount;
+	result.data[3].ToUnifiedFormat(fetch_count, extendedprice);
+	result.data[1].ToUnifiedFormat(fetch_count, discount);
+	auto extendedprice_data = UnifiedVectorFormat::GetData<int64_t>(extendedprice);
+	auto discount_data = UnifiedVectorFormat::GetData<int64_t> (discount);
+	static BMTableScan bm_table_scan_test;
+	int64_t* gathered_extendedprice = (int64_t*)aligned_alloc(8, approved_tuple_count * sizeof(int64_t));
+	int64_t* gathered_discount = (int64_t*)aligned_alloc(8, approved_tuple_count * sizeof(int64_t));
+	bm_table_scan_test.bm_gather_i64_from_i32_idx(extendedprice_data, sel_vector, approved_tuple_count, gathered_extendedprice);
+	bm_table_scan_test.bm_gather_i64_from_i32_idx(discount_data, sel_vector, approved_tuple_count, gathered_discount);
+
+	uint16_t base = 0;
+	while(base + 7 < approved_tuple_count) {
+		bm_table_scan_test.bm_exe_aggregation(gathered_extendedprice, gathered_discount, base, sum_q6);
+		base += 8;
+	}
+	while(base < approved_tuple_count) {
+		sum_q6 += gathered_extendedprice[base] * gathered_discount[base];
+		base++;
+	}
+
+	std::free(gathered_extendedprice);
+	std::free(gathered_discount);
+}
+
+int64_t sum_q6 = 0;
+double scan_time = 0;
 template <TableScanType TYPE>
 void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result) {
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
@@ -656,6 +693,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					}
 					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
 				}
+
+				// AppendSelVectorToGlobal(sel.data(), approved_tuple_count, this->start + current_row);
 			}
 			if (approved_tuple_count == 0) {
 				// all rows were filtered out by the table filters
@@ -703,6 +742,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				}
 			}
 			filter_info.EndFilter(filter_state);
+			
+			// SelectiveGatherInChunk(result, sel.data(), count, approved_tuple_count);
 
 			D_ASSERT(approved_tuple_count > 0);
 			count = approved_tuple_count;

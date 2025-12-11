@@ -144,13 +144,14 @@ struct DebugClientContextState : public ClientContextState {
 #endif
 
 int ClientContext::sf = 10;
-Table_config *ClientContext::Make_Config(std::string name, int cardinality, bool is_lazyload, Index_encoding encoding, int group_length) {
+Table_config* ClientContext::Make_Config(std::string name, int cardinality, std::string file_format, int zip_num, bool segmented_btv, bool is_lazyload, Index_encoding encoding, int group_length) {
 	Table_config *config = new Table_config {};
 	config->n_workers = 1;
 	config->DATA_PATH = "";
 	std::string global_path = "/usr/local/dataset/DuckDB/";
-	std::string path = "bm_";
-	path.append(to_string((int)(1500000 * sf)));
+	std::string path = file_format;
+	path.append("_");
+	path.append(to_string((int)(1500000 * ClientContext::sf)));
 	path.append("_");
 	path.append(name);
 	if(access(path.c_str(), F_OK) == -1) {
@@ -168,6 +169,8 @@ Table_config *ClientContext::Make_Config(std::string name, int cardinality, bool
 	config->on_disk = false;
 	config->showEB = false;
 	config->decode = false;
+	config->file_format = file_format;
+	config->zip_num = zip_num;
 
 	// DBx1000 doesn't use the following parameters;
 	// they are used by nicolas.
@@ -179,7 +182,7 @@ Table_config *ClientContext::Make_Config(std::string name, int cardinality, bool
 	config->n_merge_threshold = 16;
 	config->db_control = false;
 
-	config->segmented_btv = true;
+	config->segmented_btv = segmented_btv;
 	config->encoded_word_len = 31;
 	// TODO: seg number?
 	config->rows_per_seg = 1000000;

@@ -80,6 +80,7 @@ SourceResultType BMTableScan::BMTPCH_Q6(ExecutionContext &context, DataChunk &ch
 {
     if(*cursor == 0) {
 			TPCH_Q6_Lineitem_GetRowIds(context, row_ids);
+			num_idlist = row_ids->size();
 		}
 		
 		if(*cursor < row_ids->size()) {
@@ -104,8 +105,8 @@ SourceResultType BMTableScan::BMTPCH_Q6(ExecutionContext &context, DataChunk &ch
 				fetch_count = row_ids->size() - *cursor;
 			}
 
-			table_bind_data.table.GetStorage().Fetch(transaction, chunk, storage_column_ids, row_ids_vec, fetch_count,
-													column_fetch_state);
+			table_bind_data.table.GetStorage().BMFetch(transaction, chunk, storage_column_ids, row_ids_vec, fetch_count,
+                                                column_fetch_state, num_idlist);
 			*cursor += fetch_count;
 			return SourceResultType::HAVE_MORE_OUTPUT;
 		}

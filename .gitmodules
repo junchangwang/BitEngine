@@ -1,4 +1,4 @@
 [submodule "extension/debit/CUBIT-dev"]
 	path = extension/debit/CUBIT-dev
 	url = https://github.com/junchangwang/CUBIT-dev.git
-	branch = RABIT
+	branch = DEBIT

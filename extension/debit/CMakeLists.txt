@@ -21,10 +21,23 @@ set(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/dbgen/bm_dbgen.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dbgen/bmtpch_constants.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/bitmap_table_scan.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/Q1.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/Q5.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/Q6.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/Q14.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q1.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q3.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q4.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q5.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q6.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q8.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q10.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q12.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q14.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q15.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q17.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/query/Q19.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/DebitGather.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/DebitSIMD.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/DuckdbSIMD.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/groupbyTest.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/hashjoin.cpp
     
 )
 

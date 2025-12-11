@@ -9,6 +9,7 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 #include <utility>
+#include <iomanip>
 
 namespace duckdb {
 
@@ -96,6 +97,9 @@ unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientCont
 	return make_uniq<TableScanGlobalSourceState>(context, *this);
 }
 
+std::vector<uint32_t> g_idlist;
+std::vector<uint32_t> sizes;
+
 SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSourceInput &input) const {
 	D_ASSERT(!column_ids.empty());
@@ -109,36 +113,118 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 			bm_table_scan.BMTPCH_Q1(context, *this);
 			context.client.query_source = "tpch";
 		}
-		// if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q01 && 
-		// 	bind_data.get()->Cast<TableScanBindData>().table.name == "lineitem") {
 
-		// 	SourceResultType res = bm_table_scan.BMTPCH_Q1(context, chunk, bind_data.get()->Cast<TableScanBindData>());
-		// 	return res;
-		// }
-		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q05 && 
-			bind_data.get()->Cast<TableScanBindData>().table.name == "orders") {
-
-			SourceResultType res = bm_table_scan.BMTPCH_Q5(context, chunk, bind_data.get()->Cast<TableScanBindData>());
-			return res;
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q03) {
+			bm_table_scan.BMTPCH_Q3(context, *this);
+			context.client.query_source = "tpch";
 		}
+
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q04) {
+			bm_table_scan.BMTPCH_Q4(context, *this);
+			context.client.query_source = "tpch";
+		}
+
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q05) {
+			bm_table_scan.BMTPCH_Q5(context, *this);
+			context.client.query_source = "tpch";
+		}
+
 		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q06 && 
 			bind_data.get()->Cast<TableScanBindData>().table.name == "lineitem") {
 
 			SourceResultType res = bm_table_scan.BMTPCH_Q6(context, chunk, bind_data.get()->Cast<TableScanBindData>());
 			return res;
 		}
+
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q08 && 
+			bind_data.get()->Cast<TableScanBindData>().table.name == "orders") {
+
+			SourceResultType res = bm_table_scan.BMTPCH_Q8(context, chunk, bind_data.get()->Cast<TableScanBindData>());
+			return res;
+		}
+		
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q10) {
+			bm_table_scan.BMTPCH_Q10(context, *this);
+			context.client.query_source = "tpch";
+		}
+
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q12) {
+			bm_table_scan.BMTPCH_Q12(context, *this);
+			context.client.query_source = "tpch";
+		}
+
 		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q14 && 
 			bind_data.get()->Cast<TableScanBindData>().table.name == "lineitem") {
 
 			SourceResultType res = bm_table_scan.BMTPCH_Q14(context, chunk, bind_data.get()->Cast<TableScanBindData>());
 			return res;
 		}
+		
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q15 && 
+			bind_data.get()->Cast<TableScanBindData>().table.name == "lineitem") {
+
+			SourceResultType res = bm_table_scan.BMTPCH_Q15(context, chunk, bind_data.get()->Cast<TableScanBindData>());
+			return res;
+		}
+
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q17) {
+			bm_table_scan.BMTPCH_Q17(context, *this);
+			context.client.query_source = "tpch";
+		}
+
+		if(context.client.GetCurrentQuery() == (char*)BMTPCH_QUERIES_q19 && 
+			bind_data.get()->Cast<TableScanBindData>().table.name == "lineitem") {
+
+			SourceResultType res = bm_table_scan.BMTPCH_Q19(context, chunk, bind_data.get()->Cast<TableScanBindData>());
+			return res;
+		}
 	}											
 
+	if(context.client.GetCurrentQuery() == "SELECT sum(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date) AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity<24;") {
+		static BMTableScan bm_table_scan;
+		bm_table_scan.Debit_SIMD(context, *this);
+		return SourceResultType::FINISHED;
+	}
+
+	if (context.client.GetCurrentQuery() == "SELECT r_name,sum(l_extendedprice * (1 - l_discount)) AS revenue FROM customer,orders,lineitem,nation,region WHERE l_orderkey = o_orderkey AND o_custkey = c_custkey AND c_nationkey = n_nationkey AND n_regionkey = r_regionkey AND l_orderkey % 10 < 1 GROUP BY r_name ORDER BY revenue DESC;"){
+		static BMTableScan bm_table_scan;
+		bm_table_scan.HashJoin(context, *this);
+		return SourceResultType::FINISHED;
+	}
+
+	
 	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
 
 	if (function.function) {
 		function.function(context.client, data, chunk);
+		if (chunk.size() == 0){
+			
+			if (context.client.GetCurrentQuery() == "SELECT sum(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= CAST('1992-01-01' AS date) AND l_shipdate < CAST('1998-01-01' AS date) AND l_discount BETWEEN 0.01 AND 0.05 AND l_quantity < 19;") {
+				static BMTableScan bm_table_scan_test;
+				bm_table_scan_test.DuckDB_SIMD(context, *this, &g_idlist);
+				g_idlist.clear();
+			}
+
+			if (context.client.GetCurrentQuery() == "SELECT sum(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= CAST('1992-01-01' AS date) AND l_shipdate < CAST('1998-01-01' AS date) AND l_discount BETWEEN 0.02 AND 0.07 AND l_quantity < 30;") {
+				static BMTableScan bm_table_scan_test;
+				bm_table_scan_test.BMGather(context, *this, &sizes, &g_idlist);
+				std::cout <<"revenue: "<< std::fixed << std::setprecision(4) << (double)sum_q6 / 10000 <<std::endl;
+				sum_q6 = 0;
+				g_idlist.clear();
+				sizes.clear();
+			}
+
+			if (context.client.GetCurrentQuery() == "SELECT sum(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= CAST('1992-01-01' AS date) AND l_shipdate < CAST('1998-01-01' AS date) AND l_discount BETWEEN 0.02 AND 0.05 AND l_quantity < 19;") {
+				std::cout <<"revenue: "<< std::fixed << std::setprecision(4) << (double)sum_q6 / 10000 <<std::endl;
+				sum_q6 = 0;
+			}
+
+			if (context.client.GetCurrentQuery() == "SELECT sum(l_quantity) from lineitem WHERE l_shipdate >= CAST('1993-01-01' AS date) AND l_shipdate < CAST('1998-01-01' AS date) group by l_returnflag,l_linestatus;"){
+				static BMTableScan bm_table_scan;
+				bm_table_scan.Groupby_Test(context, *this);
+			}
+
+		}
 		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
 

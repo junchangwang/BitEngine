@@ -16,6 +16,9 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 
+#include <immintrin.h>
+#include <algorithm>
+#include <chrono>
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -361,6 +364,96 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 		}
 		result.SetCardinality(count);
 	}
+}
+
+struct BMFetchColState {
+    RowGroup *last_row_group = nullptr;
+    std::vector<ColumnSegment *> segment_ptrs;
+    std::vector<idx_t> segment_end_indices;
+    idx_t place = 0;
+};
+std::vector<BMFetchColState> col_states;
+void RowGroupCollection::BMFetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
+							   const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state, idx_t &num_idlist) {
+	// figure out which row_group to fetch from
+	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
+	col_states.resize(column_ids.size());
+	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		auto &col_state = col_states[col_idx];
+		idx_t count = 0;
+		idx_t result_offset = 0;
+		idx_t temp_offset = 0;
+		vector<row_t> segment_row_ids;
+		while (result_offset < fetch_count) {
+			segment_row_ids.clear();
+			auto row_id = row_ids[result_offset];
+
+			if (row_id >= 59986052) {
+				break;
+			}
+
+			RowGroup *row_group;
+			{
+				idx_t segment_index;
+				// TODO: get rid of mutex lock?
+				auto l = row_groups->Lock();
+				if (!row_groups->TryGetSegmentIndex(l, row_id, segment_index)) {
+				// in parallel append scenarios it is possible for the row_id
+				continue;
+				}
+				row_group = row_groups->GetSegmentByIndex(l, segment_index);
+			}
+			if (!row_group->Fetch(transaction, row_id - row_group->start)) {
+				continue;
+			}
+
+			auto &col_data = row_group->GetColumn(column_ids[col_idx]);
+			idx_t col_end = col_data.start + col_data.count;
+
+			if (row_group != col_state.last_row_group) {
+				u_int64_t seg_offset = 0;
+
+				col_state.last_row_group = row_group;
+				col_state.segment_end_indices.clear();
+				col_state.segment_ptrs.clear();
+				col_state.place = 0;
+
+				auto &segment_tree = col_data.data;
+				auto l = segment_tree.Lock();
+				const auto &segments = segment_tree.ReferenceSegments(l);
+				for (const auto &node : segments) {
+					idx_t seg_start = node.row_start;
+					idx_t seg_end = seg_start + node.node->count;
+					
+					auto seg_upper = std::upper_bound(row_ids, row_ids + std::min(seg_end, num_idlist), seg_end - 1);
+					if (row_ids < seg_upper) {
+						col_state.segment_ptrs.push_back(node.node.get());
+						col_state.segment_end_indices.push_back(seg_upper - (row_ids + seg_offset + temp_offset));
+						seg_offset += seg_upper - row_ids;
+						temp_offset = 0;
+					}
+				}
+			}
+
+			if (col_state.segment_end_indices[col_state.place] + result_offset >= fetch_count) {
+				segment_row_ids.insert(segment_row_ids.end(), row_ids + result_offset, row_ids + fetch_count);
+			
+				col_state.segment_ptrs[col_state.place]->FetchRowsInSeg(state, segment_row_ids, result.data[col_idx], result_offset);
+				col_state.segment_end_indices[col_state.place] -= (fetch_count-result_offset);
+				result_offset = fetch_count;
+			}
+			else {
+				segment_row_ids.insert(segment_row_ids.end(), row_ids + result_offset, row_ids + result_offset + col_state.segment_end_indices[col_state.place]);
+				col_state.segment_ptrs[col_state.place]->FetchRowsInSeg(state, segment_row_ids, result.data[col_idx], result_offset);
+				result_offset += col_state.segment_end_indices[col_state.place];
+				temp_offset = result_offset;
+				col_state.place++;
+			}
+			count += segment_row_ids.size();
+		}
+		result.SetCardinality(count);
+	}
+	num_idlist -= fetch_count;
 }
 
 //===--------------------------------------------------------------------===//
