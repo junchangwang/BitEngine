@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <immintrin.h>
+#include <netinet/in.h>
 
 namespace duckdb {
 
@@ -44,6 +45,9 @@ static void GetRowidsSeg(SegBtv &btv_res, vector<row_t> *row_ids);
 void bm_gather_i64_from_i32_idx(const int64_t* A, const uint32_t* B, int n, int64_t* out);
 
 void bm_exe_aggregation(int64_t *price_ptr, int64_t *discount_ptr, uint16_t base, int64_t &sum);
+
+vector<uint32_t>* reduce_leadingbits(ibis::bitvector &ttt_res);
+vector<uint32_t>* reduce_leadingbits_seg(SegBtv &ttt_res);
 
 
 

@@ -171,19 +171,19 @@ inline void reduce_zero(uint32_t *dst, uint32_t *src) {
 #endif
 }
 
-inline void groupby_aggregation(int32_t *quantity_ptr, uint16_t base, uint16_t bits, agg_data &sum) 
+inline void groupby_aggregation(int64_t *quantity_ptr, uint16_t base, uint8_t bits, agg_data &sum) 
 {
 #if defined(__AVX512F__)
 	if(!bits)
 		return;
 
-	__m512i indexes0 = _mm512_maskz_compress_epi32(bits, _mm512_loadu_epi32(quantity_ptr + base));
-	sum.sum_qty += _mm512_reduce_add_epi32(indexes0);
+	__m512i indexes0 = _mm512_maskz_compress_epi64(bits, _mm512_loadu_epi64(quantity_ptr + base));
+	sum.sum_qty += _mm512_reduce_add_epi64(indexes0);
 #else
 	if (!bits)
         return;
 
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 8; i++) {
         if (bits & (1 << i)) {
             int idx = base + i;
             
@@ -202,6 +202,7 @@ void BMTableScan::Groupby_Test(ExecutionContext &context, const PhysicalTableSca
 	long long groupby_time = 0;
 	long long compute_time = 0;
 	long long scan_time = 0;
+	long long timer = 0;
 	auto rabit_linestatus = dynamic_cast<rabit::Rabit *>(context.client.bitmap_linestatus);
 	auto rabit_returnflag = dynamic_cast<rabit::Rabit *>(context.client.bitmap_returnflag);
 	auto rabit_shipdate = dynamic_cast<rabit::Rabit *>(context.client.bitmap_shipdate);
@@ -217,7 +218,7 @@ void BMTableScan::Groupby_Test(ExecutionContext &context, const PhysicalTableSca
 	types.push_back(lineitem_table.GetColumns().GetColumnTypes()[4]);
 
 	std::map<std::pair<char, char>, std::pair<vector<row_t>, int64_t> > ids_map;
-	std::map<std::pair<char, char>, std::pair<vector<uint32_t>*, uint16_t *> > rabit_res_map;
+	std::map<std::pair<char, char>, std::pair<vector<uint32_t>*, uint8_t *> > rabit_res_map;
 
 	auto s0 = std::chrono::high_resolution_clock::now();
 	
@@ -243,77 +244,16 @@ void BMTableScan::Groupby_Test(ExecutionContext &context, const PhysicalTableSca
 			auto &ttt_res = *btv_linestatus;
 			ttt_res._and_in_thread(btv_returnflag, 0, ttt_res.seg_table.size());
 			ttt_res._and_in_thread(btv_shipdate, 0, ttt_res.seg_table.size());
-
 			uint64_t count = 0;
 			for (const auto & [id_t, seg_t] : ttt_res.seg_table)
 				count += seg_t->btv->count();
 
 			if(!count) continue;
 		
-			size_t total_bits = ttt_res.do_cnt();
-			vector<uint32_t> *btv_res = new vector<uint32_t>(total_bits / 32 + (total_bits % 32 ? 1 : 0) + 4);
-
-			uint32_t *dst_data = (uint32_t *)&(*btv_res)[0];
-			size_t seg_idx = 0;
-			size_t seg_cnt = ttt_res.seg_table.size();
-			std::vector<uint32_t> remain_words;
-
-			for (const auto& seg_pair : ttt_res.seg_table) {
-				ibis::bitvector* seg_btv = seg_pair.second->btv;
-				uint32_t *src_data = seg_btv->m_vec.begin();
-				uint32_t* src_end = seg_btv->m_vec.end();
-
-				while(remain_words.size() < 32 && src_data < src_end) {
-					remain_words.push_back(*src_data);
-					src_data++;
-				}
-
-				if(remain_words.size() == 32) {
-					reduce_zero(dst_data, remain_words.data());
-					dst_data += 31;
-					remain_words.clear();
-				}
-
-				while(src_data + 31 < src_end) {
-					reduce_zero(dst_data, src_data);
-					dst_data += 31;
-					src_data += 32;
-				}
-
-				while(src_data < src_end) {
-					remain_words.push_back(*src_data);
-					src_data++;
-				}
-			}
-
-			int need_bits = 31;
-			uint32_t *src_data2 = remain_words.data();
-			uint32_t *src_end2 = remain_words.data() + remain_words.size();
-			while(src_data2 + 1 < src_end2) {
-				dst_data[0] = ((src_data2[0] << (32 - need_bits)) | (src_data2[1] >> (need_bits - 1)));
-				dst_data[0] = htonl(dst_data[0]);
-				need_bits--;
-				src_data2++;
-				dst_data++;
-			}
-
-			auto &last_seg = ttt_res.seg_table.rbegin()->second->btv;
-			dst_data[0] = src_data2[0] << (32 - need_bits);
-			uint32_t last_word = last_seg->active.val << (32 - last_seg->active.nbits);
-			if(last_seg->active.nbits + need_bits > 32) {
-				dst_data[0] |= (last_word >> need_bits);
-				dst_data[0] = htonl(dst_data[0]);
-				last_word <<= (32 - need_bits);
-				dst_data[1] = last_word;
-				dst_data[1] = htonl(dst_data[1]);
-			} else {
-				dst_data[0] |= (last_word >> need_bits);
-				dst_data[0] = htonl(dst_data[0]);
-			}
-
+			vector<uint32_t> *btv_res = reduce_leadingbits_seg(ttt_res);
 
 			rabit_res_map[{r, i}].first = btv_res;
-			rabit_res_map[{r, i}].second = (uint16_t *)&((*btv_res)[0]);
+			rabit_res_map[{r, i}].second = (uint8_t *)&((*btv_res)[0]);
 			q1_ans[{r, i}].count_order = count;
 		}
 	}
@@ -340,31 +280,23 @@ void BMTableScan::Groupby_Test(ExecutionContext &context, const PhysicalTableSca
 		auto xt1 = std::chrono::high_resolution_clock::now();
 		scan_time += std::chrono::duration_cast<std::chrono::nanoseconds>(xt1 - xt0).count();
 
-		int32_t* quantity_data_32 = new int32_t[result.size()];
-		for (int i = 0; i < result.size(); ++i) {
-			quantity_data_32[i] = static_cast<int32_t>(quantity_data[i]);
-		}
-
 		auto st1 = std::chrono::high_resolution_clock::now();
 
 		for(auto &ids_it : rabit_res_map) {
 			auto &btv_it = ids_it.second.second;
 			auto &ans_it = q1_ans[ids_it.first];
 			uint16_t base = 0;
-			while(base + 15 < result.size() ) {
-				uint16_t val = *btv_it;
-				uint8_t low = val & 0xFF;
-				uint8_t high = (val >> 8) & 0xFF;
-				uint16_t reversed = (reverse_table[high] << 8) | reverse_table[low];
-				groupby_aggregation(quantity_data_32, base, reversed, q1_ans[ids_it.first]);
+			while(base + 7 < result.size() ) {
+
+				groupby_aggregation(quantity_data, base, reverse_table[*btv_it], q1_ans[ids_it.first]);
 				btv_it++;
-				base += 16;
+				base += 8;
 			}
 			if(base < result.size()) {
-				uint16_t bits = *btv_it;
+				uint8_t bits = *btv_it;
 				while(base < result.size()) {
-					if( bits & 0x8000 ) {
-						ans_it.sum_qty += quantity_data_32[base];
+					if( bits & 0x80 ) {
+						ans_it.sum_qty += quantity_data[base];
 					}
 					base++;
 					bits <<= 1;
@@ -377,9 +309,10 @@ void BMTableScan::Groupby_Test(ExecutionContext &context, const PhysicalTableSca
 	std::cout << "scan time : "<< scan_time/1000000 << "ms" << std::endl;
 	std::cout << "groupby time : "<< groupby_time/1000000 << "ms" << std::endl;
 	std::cout << "compute time : "<< compute_time/1000000 << "ms" << std::endl;
-	// for(auto &it : q1_ans) {
-	// 	std::cout << it.first.first << it.first.second << " : " << it.second << std::endl;
-	// }
+	
+	for(auto &it : q1_ans) {
+		std::cout << it.first.first << it.first.second << " : " << it.second << std::endl;
+	}
 	return;
 }
 

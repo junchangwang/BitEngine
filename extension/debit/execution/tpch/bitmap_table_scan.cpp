@@ -202,4 +202,164 @@ void BMTableScan::bm_exe_aggregation(int64_t *price_ptr, int64_t *discount_ptr, 
 #endif
 }
 
+inline void reduce_zero(uint32_t *dst, uint32_t *src) {
+#if defined(__AVX512F__)
+	__m512i mask = _mm512_set_epi8(
+		12, 13, 14, 15,8, 9, 10, 11,4, 5, 6, 7, 0, 1, 2, 3,
+		12, 13, 14, 15,8, 9, 10, 11,4, 5, 6, 7, 0, 1, 2, 3,
+		12, 13, 14, 15,8, 9, 10, 11,4, 5, 6, 7, 0, 1, 2, 3,
+		12, 13, 14, 15,8, 9, 10, 11,4, 5, 6, 7, 0, 1, 2, 3
+	);
+
+	_mm512_storeu_epi32(dst,\
+	_mm512_shuffle_epi8( \
+	_mm512_or_si512( \
+		_mm512_sllv_epi32(_mm512_loadu_epi32(src), _mm512_set_epi32(16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1)),\
+		_mm512_srlv_epi32(_mm512_loadu_epi32(src + 1), _mm512_set_epi32(15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30))), mask));
+
+	_mm512_storeu_epi32(dst + 16,\
+	_mm512_shuffle_epi8( \
+	_mm512_or_si512( \
+		_mm512_sllv_epi32(_mm512_loadu_epi32(src + 16), _mm512_set_epi32(0,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17)),\
+		_mm512_srlv_epi32(_mm512_loadu_epi32(src + 17), _mm512_set_epi32(0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14))), mask));
+#else
+	const uint8_t shuffle_table[64] = {
+        3,2,1,0,7,6,5,4,11,10,9,8,15,14,13,12,
+        3,2,1,0,7,6,5,4,11,10,9,8,15,14,13,12,
+        3,2,1,0,7,6,5,4,11,10,9,8,15,14,13,12,
+        3,2,1,0,7,6,5,4,11,10,9,8,15,14,13,12
+    };
+
+    const int shift_left[32] = {
+        1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
+        17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,0,
+    };
+
+    const int shift_right[32] = {
+        30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,
+        14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,0
+    };
+
+    for (int i = 0; i < 32; i++) {
+        uint32_t val1 = src[i] << shift_left[i];
+        uint32_t val2 = src[i+1] >> shift_right[i];
+        uint32_t combined = val1 | val2;
+
+        uint32_t shuffled = 0;
+        for (int j = 0; j < 4; j++) {
+            uint8_t byte = (combined >> (j*8)) & 0xFF;
+            uint8_t new_pos = shuffle_table[(i%16)*4 + j];
+            shuffled |= (uint32_t(byte) << (new_pos*8));
+        }
+        dst[i] = shuffled;
+    }
+#endif
+}
+
+vector<uint32_t>* BMTableScan::reduce_leadingbits(ibis::bitvector &ttt_res) {
+    size_t total_bits = ttt_res.size();
+    vector<uint32_t> *btv_res = new vector<uint32_t>(total_bits / 32 + (total_bits % 32 ? 1 : 0) + 4);
+
+    uint32_t *dst_data = (uint32_t *)&(*btv_res)[0];
+    uint32_t *src_data = ttt_res.m_vec.begin();
+    uint32_t* src_end = ttt_res.m_vec.end();
+
+    // load 31 dst once
+    while(src_data + 31 < src_end) {
+        reduce_zero(dst_data, src_data);
+        dst_data += 31;
+        src_data += 32;
+    }
+    // 1 dst once
+    int need_bits = 31;
+    while(src_data + 1 < src_end) {
+        dst_data[0] = ((src_data[0] << (32 - need_bits)) | (src_data[1] >> (need_bits - 1)));
+        dst_data[0] = htonl(dst_data[0]);
+        need_bits--;
+        src_data++;
+        dst_data++;
+    }
+
+    // active word
+    dst_data[0] = src_data[0] << (32 - need_bits);
+    uint32_t last_word = ttt_res.active.val << (32 - ttt_res.active.nbits);
+    if(ttt_res.active.nbits + need_bits > 32) {
+        dst_data[0] |= (last_word >> need_bits);
+        dst_data[0] = htonl(dst_data[0]);
+        last_word <<= (32 - need_bits);
+        dst_data[1] = last_word;
+        dst_data[1] = htonl(dst_data[1]);
+    } else {
+        dst_data[0] |= (last_word >> need_bits);
+        dst_data[0] = htonl(dst_data[0]);
+    }
+    return btv_res;
+}
+
+vector<uint32_t>* BMTableScan::reduce_leadingbits_seg(SegBtv &ttt_res) {
+    size_t total_bits = ttt_res.do_cnt();
+    vector<uint32_t> *btv_res = new vector<uint32_t>(total_bits / 32 + (total_bits % 32 ? 1 : 0) + 4);
+
+    uint32_t *dst_data = (uint32_t *)&(*btv_res)[0];
+    size_t seg_idx = 0;
+    size_t seg_cnt = ttt_res.seg_table.size();
+    std::vector<uint32_t> remain_words;
+
+    for (const auto& seg_pair : ttt_res.seg_table) {
+        ibis::bitvector* seg_btv = seg_pair.second->btv;
+        uint32_t *src_data = seg_btv->m_vec.begin();
+        uint32_t* src_end = seg_btv->m_vec.end();
+
+        while(remain_words.size() < 32 && src_data < src_end) {
+            remain_words.push_back(*src_data);
+            src_data++;
+        }
+
+        if(remain_words.size() == 32) {
+            reduce_zero(dst_data, remain_words.data());
+            dst_data += 31;
+            remain_words.clear();
+        }
+
+        while(src_data + 31 < src_end) {
+            reduce_zero(dst_data, src_data);
+            dst_data += 31;
+            src_data += 32;
+        }
+
+        while(src_data < src_end) {
+            remain_words.push_back(*src_data);
+            src_data++;
+        }
+    }
+
+    int need_bits = 31;
+    uint32_t *src_data2 = remain_words.data();
+    uint32_t *src_end2 = remain_words.data() + remain_words.size();
+    while(src_data2 + 1 < src_end2) {
+        dst_data[0] = ((src_data2[0] << (32 - need_bits)) | (src_data2[1] >> (need_bits - 1)));
+        dst_data[0] = htonl(dst_data[0]);
+        need_bits--;
+        src_data2++;
+        dst_data++;
+    }
+
+    auto &last_seg = ttt_res.seg_table.rbegin()->second->btv;
+    dst_data[0] = src_data2[0] << (32 - need_bits);
+    uint32_t last_word = last_seg->active.val << (32 - last_seg->active.nbits);
+    if(last_seg->active.nbits + need_bits > 32) {
+        dst_data[0] |= (last_word >> need_bits);
+        dst_data[0] = htonl(dst_data[0]);
+        last_word <<= (32 - need_bits);
+        dst_data[1] = last_word;
+        dst_data[1] = htonl(dst_data[1]);
+    } else {
+        dst_data[0] |= (last_word >> need_bits);
+        dst_data[0] = htonl(dst_data[0]);
+    }
+
+    return btv_res;
+}
+
+
 }

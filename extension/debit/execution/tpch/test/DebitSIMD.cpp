@@ -284,69 +284,12 @@ void BMTableScan::Debit_SIMD(ExecutionContext &context, const PhysicalTableScan 
 	double time_count = 0;
 	double scan_count = 0;
 	auto s0 = std::chrono::high_resolution_clock::now();
-	size_t total_bits = ttt_res.do_cnt();
-	vector<uint32_t> *btv_res = new vector<uint32_t>(total_bits / 32 + (total_bits % 32 ? 1 : 0) + 32, 0);
 
-	uint32_t *dst_data = (uint32_t *)&(*btv_res)[0];
-	size_t seg_idx = 0;
-	size_t seg_cnt = ttt_res.seg_table.size();
-	std::vector<uint32_t> remain_words;
+	vector<uint32_t> *btv_res = reduce_leadingbits_seg(ttt_res);
 
-	for (const auto& seg_pair : ttt_res.seg_table) {
-		ibis::bitvector* seg_btv = seg_pair.second->btv;
-		uint32_t *src_data = seg_btv->m_vec.begin();
-		uint32_t* src_end = seg_btv->m_vec.end();
-
-		while(remain_words.size() < 32 && src_data < src_end) {
-			remain_words.push_back(*src_data);
-			src_data++;
-		}
-
-		if(remain_words.size() == 32) {
-			remain_words.push_back(0);
-			reduce_zero(dst_data, remain_words.data());
-			dst_data += 31;
-			remain_words.clear();
-		}
-
-		while(src_data + 32 < src_end) {
-			reduce_zero(dst_data, src_data);
-			dst_data += 31;
-			src_data += 32;
-		}
-
-		while(src_data < src_end) {
-			remain_words.push_back(*src_data);
-			src_data++;
-		}
-	}
-
-	int need_bits = 31;
-	uint32_t *src_data2 = remain_words.data();
-	uint32_t *src_end2 = remain_words.data() + remain_words.size();
-	while(src_data2 + 1 < src_end2) {
-		dst_data[0] = ((src_data2[0] << (32 - need_bits)) | (src_data2[1] >> (need_bits - 1)));
-		dst_data[0] = htonl(dst_data[0]);
-		need_bits--;
-		src_data2++;
-		dst_data++;
-	}
-
-	auto &last_seg = ttt_res.seg_table.rbegin()->second->btv;
-	dst_data[0] = src_data2[0] << (32 - need_bits);
-	uint32_t last_word = last_seg->active.val << (32 - last_seg->active.nbits);
-	if(last_seg->active.nbits + need_bits > 32) {
-		dst_data[0] |= (last_word >> need_bits);
-		dst_data[0] = htonl(dst_data[0]);
-		last_word <<= (32 - need_bits);
-		dst_data[1] = last_word;
-		dst_data[1] = htonl(dst_data[1]);
-	} else {
-		dst_data[0] |= (last_word >> need_bits);
-		dst_data[0] = htonl(dst_data[0]);
-	}
 	auto s1 = std::chrono::high_resolution_clock::now();
 	time_count += std::chrono::duration_cast<std::chrono::nanoseconds>(s1 - s0).count();
+	
 	uint16_t* btv_res_ptr = (uint16_t *)&((*btv_res)[0]);
 	bmsimd_data agg_ans;
 	agg_ans.count_order = count;	

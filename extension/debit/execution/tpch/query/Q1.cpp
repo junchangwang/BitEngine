@@ -126,57 +126,42 @@ inline void flip_bitvector(ibis::bitvector *btv)
 #endif
 }
 
-inline void reduce_zero(uint32_t *dst, uint32_t *src) {
+inline void bit_and(uint32_t* dst, uint32_t* src, size_t n_words) {
 #if defined(__AVX512F__)
-	__m512i mask = _mm512_set_epi8(
-		12, 13, 14, 15,8, 9, 10, 11,4, 5, 6, 7, 0, 1, 2, 3,
-		12, 13, 14, 15,8, 9, 10, 11,4, 5, 6, 7, 0, 1, 2, 3,
-		12, 13, 14, 15,8, 9, 10, 11,4, 5, 6, 7, 0, 1, 2, 3,
-		12, 13, 14, 15,8, 9, 10, 11,4, 5, 6, 7, 0, 1, 2, 3
-	);
-
-	_mm512_storeu_epi32(dst,\
-	_mm512_shuffle_epi8( \
-	_mm512_or_si512( \
-		_mm512_sllv_epi32(_mm512_loadu_epi32(src), _mm512_set_epi32(16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1)),\
-		_mm512_srlv_epi32(_mm512_loadu_epi32(src + 1), _mm512_set_epi32(15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30))), mask));
-
-	_mm512_storeu_epi32(dst + 16,\
-	_mm512_shuffle_epi8( \
-	_mm512_or_si512( \
-		_mm512_sllv_epi32(_mm512_loadu_epi32(src + 16), _mm512_set_epi32(0,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17)),\
-		_mm512_srlv_epi32(_mm512_loadu_epi32(src + 17), _mm512_set_epi32(0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14))), mask));
-#else
-	const uint8_t shuffle_table[64] = {
-        3,2,1,0,7,6,5,4,11,10,9,8,15,14,13,12,
-        3,2,1,0,7,6,5,4,11,10,9,8,15,14,13,12,
-        3,2,1,0,7,6,5,4,11,10,9,8,15,14,13,12,
-        3,2,1,0,7,6,5,4,11,10,9,8,15,14,13,12
-    };
-
-    const int shift_left[32] = {
-        1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
-        17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,0,
-    };
-
-    const int shift_right[32] = {
-        30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,
-        14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,0
-    };
-
-    for (int i = 0; i < 32; i++) {
-        uint32_t val1 = src[i] << shift_left[i];
-        uint32_t val2 = src[i+1] >> shift_right[i];
-        uint32_t combined = val1 | val2;
-
-        uint32_t shuffled = 0;
-        for (int j = 0; j < 4; j++) {
-            uint8_t byte = (combined >> (j*8)) & 0xFF;
-            uint8_t new_pos = shuffle_table[(i%16)*4 + j];
-            shuffled |= (uint32_t(byte) << (new_pos*8));
-        }
-        dst[i] = shuffled;
+    size_t i = 0;
+    for (; i + 15 < n_words; i += 16) {
+        __m512i v_dst = _mm512_loadu_si512(dst + i);
+        __m512i v_src = _mm512_loadu_si512(src + i);
+        v_dst = _mm512_and_si512(v_dst, v_src);
+        _mm512_storeu_si512(dst + i, v_dst);
     }
+    for (; i < n_words; i++) {
+        dst[i] &= src[i];
+    }
+#else
+    for (size_t i = 0; i < n_words; i++) {
+        dst[i] &= src[i];
+    }
+#endif
+}
+
+
+inline void triple_bit_and(uint32_t* dst, uint32_t* src1, uint32_t* src2, size_t n_words) {
+#if defined(__AVX512F__)
+    size_t i = 0;
+    for (; i + 15 < n_words; i += 16) {
+        __m512i v_dst = _mm512_loadu_si512(dst + i);
+        __m512i v_src1 = _mm512_loadu_si512(src1 + i);
+		__m512i v_src2 = _mm512_loadu_si512(src2 + i);
+        v_dst = _mm512_and_si512(v_dst, v_src1);
+		v_dst = _mm512_and_si512(v_dst, v_src2);
+        _mm512_storeu_si512(dst + i, v_dst);
+    }
+    for (; i < n_words; i++) {
+        dst[i] &= src1[i];
+		dst[i] &= src2[i];
+    }
+#else
 #endif
 }
 
@@ -312,67 +297,7 @@ void BMTableScan::BMTPCH_Q1(ExecutionContext &context, const PhysicalTableScan &
 
 				if(!count) continue;
 			
-				size_t total_bits = ttt_res.do_cnt();
-                vector<uint32_t> *btv_res = new vector<uint32_t>(total_bits / 32 + (total_bits % 32 ? 1 : 0) + 4);
-
-                uint32_t *dst_data = (uint32_t *)&(*btv_res)[0];
-                size_t seg_idx = 0;
-                size_t seg_cnt = ttt_res.seg_table.size();
-				std::vector<uint32_t> remain_words;
-
-                for (const auto& seg_pair : ttt_res.seg_table) {
-                    ibis::bitvector* seg_btv = seg_pair.second->btv;
-					uint32_t *src_data = seg_btv->m_vec.begin();
-					uint32_t* src_end = seg_btv->m_vec.end();
-
-					while(remain_words.size() < 32 && src_data < src_end) {
-						remain_words.push_back(*src_data);
-						src_data++;
-					}
-
-					if(remain_words.size() == 32) {
-						reduce_zero(dst_data, remain_words.data());
-						dst_data += 31;
-						remain_words.clear();
-					}
-
-					while(src_data + 31 < src_end) {
-						reduce_zero(dst_data, src_data);
-						dst_data += 31;
-						src_data += 32;
-					}
-
-					while(src_data < src_end) {
-						remain_words.push_back(*src_data);
-						src_data++;
-					}
-				}
-
-				int need_bits = 31;
-				uint32_t *src_data2 = remain_words.data();
-				uint32_t *src_end2 = remain_words.data() + remain_words.size();
-				while(src_data2 + 1 < src_end2) {
-					dst_data[0] = ((src_data2[0] << (32 - need_bits)) | (src_data2[1] >> (need_bits - 1)));
-					dst_data[0] = htonl(dst_data[0]);
-					need_bits--;
-					src_data2++;
-					dst_data++;
-				}
-
-				auto &last_seg = ttt_res.seg_table.rbegin()->second->btv;
-				dst_data[0] = src_data2[0] << (32 - need_bits);
-				uint32_t last_word = last_seg->active.val << (32 - last_seg->active.nbits);
-				if(last_seg->active.nbits + need_bits > 32) {
-					dst_data[0] |= (last_word >> need_bits);
-					dst_data[0] = htonl(dst_data[0]);
-					last_word <<= (32 - need_bits);
-					dst_data[1] = last_word;
-					dst_data[1] = htonl(dst_data[1]);
-				} else {
-					dst_data[0] |= (last_word >> need_bits);
-					dst_data[0] = htonl(dst_data[0]);
-				}
-
+                vector<uint32_t> *btv_res = reduce_leadingbits_seg(ttt_res);
 
 				rabit_res_map[{returnflag_map[r], linestatus_map[i]}].first = btv_res;
 				rabit_res_map[{returnflag_map[r], linestatus_map[i]}].second = (uint8_t *)&((*btv_res)[0]);
@@ -692,7 +617,7 @@ void BMTableScan::BMTPCH_Q1(ExecutionContext &context, const PhysicalTableScan &
 			{
 				long long time1 = 0;
 				long long timeb = 0;
-				long long timeids = 0;
+				long long timer = 0;
 				auto rabit_linestatus = dynamic_cast<rabit::Rabit *>(context.client.bitmap_linestatus);
 				auto rabit_returnflag = dynamic_cast<rabit::Rabit *>(context.client.bitmap_returnflag);
 				auto rabit_shipdate = dynamic_cast<rabit::Rabit *>(context.client.bitmap_shipdate);
@@ -726,72 +651,86 @@ void BMTableScan::BMTPCH_Q1(ExecutionContext &context, const PhysicalTableScan &
 
 				auto stb = std::chrono::high_resolution_clock::now();
 
+				// ibis::bitvector shipdate_res;
+				// shipdate_res.copy(*rabit_shipdate->Btvs[rabit_shipdate->config->g_cardinality - 1]->btv);
+				// shipdate_res.decompress();
+				// // compute l_shipdate > CAST('1998-09-02' AS date)
+				// for(int i = rabit_shipdate->config->g_cardinality - 2; i > right_days; i--)
+				// 	shipdate_res |= *rabit_shipdate->Btvs[i]->btv;
+					
+				// // invert the result (get l_shipdate <= CAST('1998-09-02' AS date))
+				// flip_bitvector(&shipdate_res);
+
+				// for(int i = 0; i < rabit_linestatus->config->g_cardinality; i++) {
+				// 	for(int r = 0; r < rabit_returnflag->config->g_cardinality; r++) {
+				// 		if (i == 0 && r > 0) {
+				// 			continue;
+				// 		}
+				// 		ibis::bitvector ttt_res, g_res;
+				// 		ttt_res.copy(*rabit_linestatus->Btvs[i]->btv);
+				// 		g_res.copy(*rabit_returnflag->Btvs[r]->btv);
+				// 		ttt_res.decompress();
+				// 		g_res.decompress();
+
+				// 		ttt_res &= g_res;
+				// 		ttt_res &= shipdate_res;
+
+				// 		uint64_t count = ttt_res.count();
+
+				// 		assert(count > 0);
+
+				// 		vector<uint32_t> *btv_res = reduce_leadingbits(ttt_res);
+
+				// 		rabit_res_map[{returnflag_map[r], linestatus_map[i]}].first = btv_res;
+				// 		rabit_res_map[{returnflag_map[r], linestatus_map[i]}].second = (uint8_t *)&((*btv_res)[0]);
+				// 		q1_ans[{returnflag_map[r], linestatus_map[i]}].count_order = count;
+
+				// 	}
+				// }
+
 				ibis::bitvector shipdate_res;
 				shipdate_res.copy(*rabit_shipdate->Btvs[rabit_shipdate->config->g_cardinality - 1]->btv);
 				shipdate_res.decompress();
+				// compute l_shipdate > CAST('1998-09-02' AS date)
 				for(int i = rabit_shipdate->config->g_cardinality - 2; i > right_days; i--)
 					shipdate_res |= *rabit_shipdate->Btvs[i]->btv;
-
+					
+				// invert the result (get l_shipdate <= CAST('1998-09-02' AS date))
 				flip_bitvector(&shipdate_res);
 
+				vector<uint32_t> *btv_shipdate = reduce_leadingbits(shipdate_res);
 				for(int i = 0; i < rabit_linestatus->config->g_cardinality; i++) {
 					for(int r = 0; r < rabit_returnflag->config->g_cardinality; r++) {
-
-						ibis::bitvector ttt_res;
-						ttt_res.copy(*rabit_linestatus->Btvs[i]->btv);
-						ttt_res &= *rabit_returnflag->Btvs[r]->btv;
-						ttt_res &= shipdate_res;
-
-						uint64_t count = ttt_res.count();
-
-						if(!count) {
+						if (i == 0 && r > 0) {
 							continue;
 						}
-
-						vector<uint32_t> *btv_res = new vector<uint32_t>(ttt_res.size() / 32 + (ttt_res.size() % 32?1:0) + 4);
-
-						uint32_t *dst_data = (uint32_t *)&(*btv_res)[0];
-						uint32_t *src_data = ttt_res.m_vec.begin();
-
-						// load 31 dst once
-						while(src_data + 31 < ttt_res.m_vec.end()) {
-							reduce_zero(dst_data, src_data);
-							dst_data += 31;
-							src_data += 32;
-						}
-
-						// 1 dst once
-						int need_bits = 31;
-						while(src_data + 1 < ttt_res.m_vec.end()) {
-							dst_data[0] = ((src_data[0] << (32 - need_bits)) | (src_data[1] >> (need_bits - 1)));
-							dst_data[0] = htonl(dst_data[0]);
-							need_bits--;
-							src_data++;
-							dst_data++;
-						}
-
-						// active word
-						dst_data[0] = src_data[0] << (32 - need_bits);
-						uint32_t last_word = ttt_res.active.val << (32 - ttt_res.active.nbits);
-						if(ttt_res.active.nbits + need_bits > 32) {
-							dst_data[0] |= (last_word >> need_bits);
-							dst_data[0] = htonl(dst_data[0]);
-							last_word <<= (32 - need_bits);
-							dst_data[1] = last_word;
-							dst_data[1] = htonl(dst_data[1]);
-						}
-						else {
-							dst_data[0] |= (last_word >> need_bits);
-							dst_data[0] = htonl(dst_data[0]);
-						}
+						ibis::bitvector ttt_res, g_res;
+						ttt_res.copy(*rabit_linestatus->Btvs[i]->btv);
+						g_res.copy(*rabit_returnflag->Btvs[r]->btv);
+						ttt_res.decompress();
+						g_res.decompress();
 						
+						vector<uint32_t> *btv_res = reduce_leadingbits(ttt_res);
+						vector<uint32_t> *btv_returnflag = reduce_leadingbits(g_res);
+						
+						// bit_and(&(*btv_res)[0], &(*btv_returnflag)[0], btv_res->size());
+						// bit_and(&(*btv_res)[0], &(*btv_shipdate)[0], btv_res->size());
+
+						triple_bit_and(&(*btv_res)[0], &(*btv_returnflag)[0], &(*btv_shipdate)[0], btv_res->size());
+
+						size_t count = ttt_res.count();
+
+						assert(count > 0);
 
 						rabit_res_map[{returnflag_map[r], linestatus_map[i]}].first = btv_res;
 						rabit_res_map[{returnflag_map[r], linestatus_map[i]}].second = (uint8_t *)&((*btv_res)[0]);
 						q1_ans[{returnflag_map[r], linestatus_map[i]}].count_order = count;
 
+						delete btv_returnflag;
 					}
 				}
+				delete btv_shipdate;
+
 				auto etb = std::chrono::high_resolution_clock::now();
 				timeb += std::chrono::duration_cast<std::chrono::nanoseconds>(etb - stb).count();
 
@@ -824,39 +763,40 @@ void BMTableScan::BMTPCH_Q1(ExecutionContext &context, const PhysicalTableScan &
 
 
 					auto st1 = std::chrono::high_resolution_clock::now();
-
+					
 					for(auto &ids_it : rabit_res_map) {
-						auto &btv_it = ids_it.second.second;
-						auto &ans_it = q1_ans[ids_it.first];
-						uint16_t base = 0;
-						while(base + 7 < result.size() ) {
-							q1_exe_aggregation(quantity_data, extendedprice_data, discount_data, tax_data,\
-												base, reverse_table[*btv_it], q1_ans[ids_it.first]);
-							btv_it++;
-							base += 8;
-						}
-						if(base < result.size()) {
-							uint8_t bits = *btv_it;
-							while(base < result.size()) {
-								if( bits & 0x80 ) {
-									ans_it.sum_qty += quantity_data[base];
-									ans_it.sum_discount += discount_data[base];
-									ans_it.sum_base_price += extendedprice_data[base];
-									ans_it.sum_disc_price += extendedprice_data[base]*(100 - discount_data[base]);
-									ans_it.sum_charge += extendedprice_data[base]*(100 - discount_data[base]) *(100 + tax_data[base]);
-								}
-								base++;
-								bits <<= 1;
-							}
-						}
-					}
+                        auto &btv_it = ids_it.second.second;
+                        auto &ans_it = q1_ans[ids_it.first];
+                        uint16_t base = 0;
+
+                        while(base + 7 < result.size() ) {
+                            q1_exe_aggregation(quantity_data, extendedprice_data, discount_data, tax_data,\
+                                                base, reverse_table[*btv_it], q1_ans[ids_it.first]);
+                            btv_it++;
+                            base += 8;
+                        }
+
+                        if(base < result.size()) {
+                            uint8_t bits = *btv_it;
+                            while(base < result.size()) {
+                                if( bits & 0x80 ) {
+                                    ans_it.sum_qty += quantity_data[base];
+                                    ans_it.sum_discount += discount_data[base];
+                                    ans_it.sum_base_price += extendedprice_data[base];
+                                    ans_it.sum_disc_price += extendedprice_data[base]*(100 - discount_data[base]);
+                                    ans_it.sum_charge += extendedprice_data[base]*(100 - discount_data[base]) *(100 + tax_data[base]);
+                                }
+                                base++;
+                                bits <<= 1;
+                            }
+                        }
+                    }
 					
 					auto et1 = std::chrono::high_resolution_clock::now();
 					time1 += std::chrono::duration_cast<std::chrono::nanoseconds>(et1 - st1).count();
 				
 				}
 				std::cout << "bitmap time : "<< timeb/1000000 << "ms" << std::endl;
-				std::cout << "ids time : "<< timeids/1000000 << "ms" << std::endl;
 				std::cout << "compute time : "<< time1/1000000 << "ms" << std::endl;
 			}
 		}
