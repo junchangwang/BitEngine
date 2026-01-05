@@ -148,19 +148,8 @@ void BMTableScan::BMTPCH_Q12(ExecutionContext &context, const PhysicalTableScan 
 	}
 
 	vector<row_t> *mail_ids = new vector<row_t>;
-	for (ibis::bitvector::indexSet index_set = mail_btv.firstIndexSet(); index_set.nIndices() > 0; ++index_set) {
-		const ibis::bitvector::word_t *indices = index_set.indices();
-		if (index_set.isRange()) {
-			for (ibis::bitvector::word_t j = *indices; j < indices[1]; ++j) {
-				mail_ids->push_back((uint64_t)j);
-			}
-		} else {
-			for (unsigned j = 0; j < index_set.nIndices(); ++j) {
-				mail_ids->push_back((uint64_t)indices[j]);
-			}
-		}
-	}
-
+	
+	GetRowids(mail_btv, mail_ids);
 
 	ibis::bitvector ship_btv;
 	ship_btv.adjustSize(0, rabit_o_orderkey->config->n_rows);
@@ -171,19 +160,8 @@ void BMTableScan::BMTPCH_Q12(ExecutionContext &context, const PhysicalTableScan 
 	}
 
 	vector<row_t> *ship_ids = new vector<row_t>;
-	for (ibis::bitvector::indexSet index_set = ship_btv.firstIndexSet(); index_set.nIndices() > 0; ++index_set) {
-		const ibis::bitvector::word_t *indices = index_set.indices();
-		if (index_set.isRange()) {
-			for (ibis::bitvector::word_t j = *indices; j < indices[1]; ++j) {
-				ship_ids->push_back((uint64_t)j);
-			}
-		} else {
-			for (unsigned j = 0; j < index_set.nIndices(); ++j) {
-				ship_ids->push_back((uint64_t)indices[j]);
-			}
-		}
-	}
-
+	
+	GetRowids(ship_btv, ship_ids);
 	
 	auto &orders_transaction = DuckTransaction::Get(context.client, orders_table.catalog);
 	TableScanState orders_scan_state;
@@ -197,6 +175,7 @@ void BMTableScan::BMTPCH_Q12(ExecutionContext &context, const PhysicalTableScan 
 	int MAIL_high_count = 0;
 	int MAIL_low_count = 0;
 	size_t cursor = 0;
+	num_idlist = mail_ids->size();
 	while(true) {
 		DataChunk result;
 		result.Initialize(context.client, types);
@@ -212,8 +191,8 @@ void BMTableScan::BMTPCH_Q12(ExecutionContext &context, const PhysicalTableScan 
 				fetch_count =  mail_ids->size() - cursor;
 			}
 
-			orders_table.GetStorage().Fetch(orders_transaction, result, storage_column_ids, row_ids_vec, fetch_count,
-													column_fetch_state);
+			orders_table.GetStorage().BMFetch(orders_transaction, result, storage_column_ids, row_ids_vec, fetch_count,
+													column_fetch_state, num_idlist);
 
 			cursor += fetch_count;
 		}
@@ -240,6 +219,7 @@ void BMTableScan::BMTPCH_Q12(ExecutionContext &context, const PhysicalTableScan 
 	int SHIP_high_count = 0;
 	int SHIP_low_count = 0;
 	cursor = 0;
+	num_idlist = ship_ids->size();
 	while(true) {
 		DataChunk result;
 		result.Initialize(context.client, types);
@@ -255,8 +235,8 @@ void BMTableScan::BMTPCH_Q12(ExecutionContext &context, const PhysicalTableScan 
 				fetch_count =  ship_ids->size() - cursor;
 			}
 
-			orders_table.GetStorage().Fetch(orders_transaction, result, storage_column_ids, row_ids_vec, fetch_count,
-													column_fetch_state);
+			orders_table.GetStorage().BMFetch(orders_transaction, result, storage_column_ids, row_ids_vec, fetch_count,
+													column_fetch_state, num_idlist);
 
 			cursor += fetch_count;
 		}

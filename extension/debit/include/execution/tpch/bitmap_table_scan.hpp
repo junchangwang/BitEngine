@@ -38,7 +38,7 @@ static void util_btv_to_id_list(int64_t *base_ptr, uint32_t &base,
 
 static void btv_logic_or(ibis::bitvector *res, ibis::bitvector *rhs);
 
-static void GetRowids(ibis::bitvector &btv_res, vector<row_t> *row_ids);
+static void GetRowids(ibis::bitvector &btv_res, std::vector<row_t> *row_ids);
 
 static void GetRowidsSeg(SegBtv &btv_res, vector<row_t> *row_ids);
 

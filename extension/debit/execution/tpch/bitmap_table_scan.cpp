@@ -92,7 +92,7 @@ void BMTableScan::util_btv_to_id_list(int64_t *base_ptr, uint32_t &base,
 #endif
 }
 
-void BMTableScan::GetRowids(ibis::bitvector &btv_res, vector<row_t> *row_ids) {
+void BMTableScan::GetRowids(ibis::bitvector &btv_res, std::vector<row_t> *row_ids) {
 	row_ids->resize(btv_res.count() + 64);
 	auto element_ptr = &(*row_ids)[0];
 

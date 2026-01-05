@@ -84,6 +84,7 @@ void BMTableScan::BMTPCH_Q3(ExecutionContext &context, const PhysicalTableScan &
 
 	char *msg = "BUILDING";
 	int32_t filter_days = 9204; // 1995-03-15
+	int32_t ending_days = 9495; // 1995-12-31
 
 	auto s0 = std::chrono::high_resolution_clock::now();
 
@@ -127,8 +128,6 @@ void BMTableScan::BMTPCH_Q3(ExecutionContext &context, const PhysicalTableScan &
 			}
 		}
 	}
-
-	
 
 	std::unordered_map<int64_t, std::pair<int64_t, std::pair<int32_t, int32_t>>> l_orderkey_map;
 
@@ -185,13 +184,21 @@ void BMTableScan::BMTPCH_Q3(ExecutionContext &context, const PhysicalTableScan &
 		}
 	}
 	auto rabit_shipdate = dynamic_cast<rabit::Rabit *>(context.client.bitmap_shipdate);
+	auto rabit_shipdate_GE = dynamic_cast<rabit::Rabit *>(context.client.bitmap_shipdate_GE);
 	ibis::bitvector btv_shipdate;
 	btv_shipdate.copy(*rabit_shipdate->Btvs[filter_days + 1]->btv);
 	btv_shipdate.decompress();
 
-	for(uint32_t i = filter_days + 2; i < rabit_shipdate->config->g_cardinality; i++) {
+	for(uint32_t i = filter_days + 2; i <= ending_days; i++) {
 		btv_shipdate |= *rabit_shipdate->Btvs[i]->btv;
 	}
+
+	int c_year = 1996;
+    int start_year = 1970;
+	for(int i = c_year - start_year; i <= c_year - start_year + 2; i++) {
+		btv_shipdate |= *rabit_shipdate_GE->Btvs_GE[i]->btv;
+	} 
+	
 	btv_res &= btv_shipdate;
 
 	{
@@ -213,18 +220,7 @@ void BMTableScan::BMTPCH_Q3(ExecutionContext &context, const PhysicalTableScan &
 
 		auto st_ids = std::chrono::high_resolution_clock::now();
 
-		for (ibis::bitvector::indexSet index_set = btv_res.firstIndexSet(); index_set.nIndices() > 0; ++index_set) {
-			const ibis::bitvector::word_t *indices = index_set.indices();
-			if (index_set.isRange()) {
-				for (ibis::bitvector::word_t j = *indices; j < indices[1]; ++j) {
-					ids->push_back((uint64_t)j);
-				}
-			} else {
-				for (unsigned j = 0; j < index_set.nIndices(); ++j) {
-					ids->push_back((uint64_t)indices[j]);
-				}
-			}
-		}
+		GetRowids(btv_res, ids);
 
 		auto et_ids = std::chrono::high_resolution_clock::now();
 		time_ids += std::chrono::duration_cast<std::chrono::nanoseconds>(et_ids - st_ids).count();

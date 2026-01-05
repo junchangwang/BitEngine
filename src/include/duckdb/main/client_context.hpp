@@ -108,6 +108,9 @@ public:
 	BaseTable *bitmap_o_orderkey;
 	BaseTable *bitmap_receiptdate;
 	BaseTable *bitmap_custkey;
+	BaseTable *bitmap_shipdate_GE;
+	BaseTable *bitmap_group1;
+	BaseTable *bitmap_group2;
 	vector<int64_t> q12_orderkey;
 	vector<int64_t> q18_orderkey;
 

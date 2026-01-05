@@ -178,6 +178,11 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 			SourceResultType res = bm_table_scan.BMTPCH_Q19(context, chunk, bind_data.get()->Cast<TableScanBindData>());
 			return res;
 		}
+
+		if (context.client.GetCurrentQuery() == "SELECT sum(l_quantity) from lineitem WHERE l_shipdate >= CAST('1993-01-01' AS date) AND l_shipdate < CAST('1998-01-01' AS date) group by l_returnflag,l_linestatus;"){
+			bm_table_scan.Groupby_Test(context, *this);
+			context.client.query_source = "tpch";
+		}
 	}											
 
 	if(context.client.GetCurrentQuery() == "SELECT sum(l_extendedprice * l_discount) AS revenue FROM lineitem WHERE l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date) AND l_discount BETWEEN 0.05 AND 0.07 AND l_quantity<24;") {
@@ -185,6 +190,8 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		bm_table_scan.Debit_SIMD(context, *this);
 		return SourceResultType::FINISHED;
 	}
+
+
 
 	if (context.client.GetCurrentQuery() == "SELECT r_name,sum(l_extendedprice * (1 - l_discount)) AS revenue FROM customer,orders,lineitem,nation,region WHERE l_orderkey = o_orderkey AND o_custkey = c_custkey AND c_nationkey = n_nationkey AND n_regionkey = r_regionkey AND l_orderkey % 10 < 1 GROUP BY r_name ORDER BY revenue DESC;"){
 		static BMTableScan bm_table_scan;
@@ -219,10 +226,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 				sum_q6 = 0;
 			}
 
-			if (context.client.GetCurrentQuery() == "SELECT sum(l_quantity) from lineitem WHERE l_shipdate >= CAST('1993-01-01' AS date) AND l_shipdate < CAST('1998-01-01' AS date) group by l_returnflag,l_linestatus;"){
-				static BMTableScan bm_table_scan;
-				bm_table_scan.Groupby_Test(context, *this);
-			}
+
 
 		}
 		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
