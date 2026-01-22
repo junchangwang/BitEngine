@@ -144,7 +144,7 @@ struct DebugClientContextState : public ClientContextState {
 #endif
 
 int ClientContext::sf = 10;
-Table_config* ClientContext::Make_Config(std::string name, int cardinality, std::string file_format, int zip_num, bool segmented_btv, bool is_lazyload, Index_encoding encoding, int group_length) {
+Table_config* ClientContext::Make_Config(std::string name, int min_value_EE, int cardinality, std::string file_format, int zip_num, bool segmented_btv, bool is_lazyload, Index_encoding encoding, int group_length) {
 	Table_config *config = new Table_config {};
 	config->n_workers = 1;
 	config->DATA_PATH = "";
@@ -197,6 +197,10 @@ Table_config* ClientContext::Make_Config(std::string name, int cardinality, std:
 		path.append(to_string(group_length));
 		config->GROUP_PATH = path;
 	}
+
+	// For executor plan
+	config->min_value_EE = min_value_EE;
+	config->max_value_EE = cardinality - 1;
 
 	return config;
 }

@@ -47,6 +47,7 @@ void bm_gather_i64_from_i32_idx(const int64_t* A, const uint32_t* B, int n, int6
 void bm_exe_aggregation(int64_t *price_ptr, int64_t *discount_ptr, uint16_t base, int64_t &sum);
 
 vector<uint32_t>* reduce_leadingbits(ibis::bitvector &ttt_res);
+
 vector<uint32_t>* reduce_leadingbits_seg(SegBtv &ttt_res);
 
 
@@ -100,6 +101,13 @@ void DuckDB_SIMD(ExecutionContext &context, const PhysicalTableScan &op, std::ve
 void Selective_Gather(ExecutionContext &context, const PhysicalTableScan &op, std::vector<uint32_t>* idlist, std::vector<uint32_t>* tuple_counts);
 
 void HashJoin(ExecutionContext &context, const PhysicalTableScan &op);
+
+void Projection_test(ExecutionContext &context, const PhysicalTableScan &op);
+
+
+void Table_Scan_GetRowids(ExecutionContext &context, vector<row_t> *row_ids, const TableScanBindData &bind_data, const PhysicalTableScan &op);
+
+SourceResultType Table_Scan(ExecutionContext &context, DataChunk &chunk, const TableScanBindData &bind_data, const PhysicalTableScan &op);
 
 };
 

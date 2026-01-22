@@ -43,6 +43,8 @@ public:
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
+	//! Columns that should use bitmap path when scanning (parallel to column_ids)
+	vector<bool> use_bitmap_columns;
 	//! Currently stores info related to filters pushed down into MultiFileLists and sample rate pushed down into the
 	//! table scan
 	ExtraOperatorInfo extra_info;

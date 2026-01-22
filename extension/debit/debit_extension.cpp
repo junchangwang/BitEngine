@@ -39,72 +39,72 @@ static void PragmaLoadBitmap(ClientContext &context, const FunctionParameters &p
         auto input_value = param.GetValue<string>();
 
         std::cout << "Loading bitmap: " << input_value << std::endl;
-
+        // FIXME : min_value_EE are not prepared for BTV_GE
         if (input_value == "shipdate") {
-            // Table_config * config_shipdate = context.Make_Config(input_value, 10562, "bm", 1, false);
-            Table_config * config_shipdate = context.Make_Config(input_value, 10562, "bm", 1, false, false, Index_encoding::GE, 364);
+            Table_config * config_shipdate = context.Make_Config(input_value, 0, 10562, "bm", 1, false);
+            // Table_config * config_shipdate = context.Make_Config(input_value, 10562, "bm", 1, false, false, Index_encoding::GE, 364);
             state = context.Read_BM(config_shipdate, &context.bitmap_shipdate, 59986052);
         }
         else if (input_value == "shipdate_GE") {
-            Table_config * config_shipdate_GE = context.Make_Config(input_value, 10562, "bm", 1, false, false, Index_encoding::GE, 364);
+            Table_config * config_shipdate_GE = context.Make_Config(input_value, 0, 10562, "bm", 1, false, false, Index_encoding::GE, 364);
             state = context.Read_BM(config_shipdate_GE, &context.bitmap_shipdate_GE, 59986052);
         }
         else if (input_value == "orderdate") {
-            Table_config * config_orderdate = context.Make_Config(input_value, 10440, "bm", 1, true);
+            Table_config * config_orderdate = context.Make_Config(input_value, 8034, 10440, "bm", 1, true);
             // Table_config * config_orderdate = context.Make_Config(input_value, 10440, "bm", 1, true, false, Index_encoding::GE, 364);
             state = context.Read_BM(config_orderdate, &context.bitmap_orderdate, 59986052);
         } 
         else if (input_value == "discount") {
-            Table_config * config_discount = context.Make_Config(input_value, 11);
+            Table_config * config_discount = context.Make_Config(input_value, 0, 11, "bm", 1, false);
             state = context.Read_BM(config_discount, &context.bitmap_discount, 59986052);
         } 
         else if (input_value == "quantity") {
-            Table_config * config_quantity = context.Make_Config(input_value, 51);
+            Table_config * config_quantity = context.Make_Config(input_value, 1, 51, "bm", 1, false);
             // Table_config * config = context.Make_Config(input_value, 51, "bm", 1, false, Index_encoding::GE, 10);
             state = context.Read_BM(config_quantity, &context.bitmap_quantity, 59986052);
         } 
         else if (input_value == "custkey") {
-            Table_config * config_custkey = context.Make_Config(input_value, 1500001, "bmz", 1000, false);
+            Table_config * config_custkey = context.Make_Config(input_value, 0, 1500001, "bmz", 1000, false);
             state = context.Read_BM(config_custkey, &context.bitmap_custkey, 15000000);
         } 
         else if (input_value == "linestatus") {
-            Table_config * config_linestatus = context.Make_Config(input_value, 2, "bm", 1, false);
+            Table_config * config_linestatus = context.Make_Config(input_value, 0, 2, "bm", 1, false);
             state = context.Read_BM(config_linestatus, &context.bitmap_linestatus, 59986052);
         } 
         else if (input_value == "returnflag") {
-            Table_config * config_returnflag = context.Make_Config(input_value, 3, "bm", 1, false);
+            Table_config * config_returnflag = context.Make_Config(input_value, 0, 3, "bm", 1, false);
             state = context.Read_BM(config_returnflag, &context.bitmap_returnflag, 59986052);
         }
         else if (input_value == "orderkey") {
-            Table_config * config_orderkey = context.Make_Config(input_value, 60000001, "bmz", 6000, false);
+            Table_config * config_orderkey = context.Make_Config(input_value, 0, 60000001, "bmz", 6000, false);
             state = context.Read_BM(config_orderkey, &context.bitmap_orderkey, 59986052);
         }
         else if (input_value == "suppkey") {
-            Table_config * config_suppkey = context.Make_Config(input_value, 10000 * sf + 1, "bm", 1, false);
+            Table_config * config_suppkey = context.Make_Config(input_value, 0, 10000 * sf + 1, "bm", 1, false);
             state = context.Read_BM(config_suppkey, &context.bitmap_suppkey, 59986052);
         } 
         else if (input_value == "partkey") {
-            Table_config * config_partkey = context.Make_Config(input_value, 200000 * sf + 1, "bm", 1, false);
+            Table_config * config_partkey = context.Make_Config(input_value, 0, 200000 * sf + 1, "bm", 1, false);
             state = context.Read_BM(config_partkey, &context.bitmap_partkey, 59986052);
         } 
         else if (input_value == "shipmode") {
-            Table_config * config_shipmode = context.Make_Config(input_value, 7, "bm", 1, false);
+            Table_config * config_shipmode = context.Make_Config(input_value, 0, 7, "bm", 1, false);
             state = context.Read_BM(config_shipmode, &context.bitmap_shipmode, 59986052);
         }
         else if (input_value == "shipinstruct") {
-            Table_config * config_shipinstruct = context.Make_Config(input_value, 4, "bm", 1, false);
+            Table_config * config_shipinstruct = context.Make_Config(input_value, 0, 4, "bm", 1, false);
             state = context.Read_BM(config_shipinstruct, &context.bitmap_shipinstruct, 59986052);
         } 
         else if (input_value == "o_orderkey") {
-            Table_config * config_o_orderkey = context.Make_Config(input_value, 60000001, "bmz", 6000, false);
+            Table_config * config_o_orderkey = context.Make_Config(input_value, 0, 60000001, "bmz", 6000, false);
             state = context.Read_BM(config_o_orderkey, &context.bitmap_o_orderkey, 15000000);
         }
         else if (input_value == "group2") {
-            Table_config * config_group2 = context.Make_Config(input_value, 2, "bm", 1, false);
+            Table_config * config_group2 = context.Make_Config(input_value, 0, 2, "bm", 1, false);
             state = context.Read_BM(config_group2, &context.bitmap_group1, 59986052);
         }
         else if (input_value == "group8") {
-            Table_config * config_group8 = context.Make_Config(input_value, 8, "bm", 1, false);
+            Table_config * config_group8 = context.Make_Config(input_value, 0, 8, "bm", 1, false);
             state = context.Read_BM(config_group8, &context.bitmap_group2, 59986052);
         }
         // else if (input_value == "receiptdate") {
@@ -136,6 +136,15 @@ static string PragmaBMGroupBy(ClientContext &context, const FunctionParameters &
     return "SELECT sum(l_quantity) from lineitem WHERE l_shipdate >= CAST('1993-01-01' AS date) AND l_shipdate < CAST('1998-01-01' AS date) group by l_returnflag,l_linestatus;";
 }
 
+static void PragmaUse(ClientContext &context, const FunctionParameters &parameters) {
+    context.query_source = "use_bitmap";
+}
+
+static void PragmaUnuse(ClientContext &context, const FunctionParameters &parameters) {
+    context.query_source = "tpch";
+
+}
+
 static void LoadInternal(DuckDB &db) {
     auto &db_instance = *db.instance;
 
@@ -147,6 +156,13 @@ static void LoadInternal(DuckDB &db) {
 
     auto bm_groupby_func = PragmaFunction::PragmaCall("bm_groupby", PragmaBMGroupBy, {}, LogicalType::VARCHAR);
     ExtensionUtil::RegisterFunction(db_instance, bm_groupby_func);
+
+    auto use_func = PragmaFunction::PragmaCall("use_bitmap", PragmaUse, {});
+    ExtensionUtil::RegisterFunction(db_instance, use_func);
+
+    auto unuse_func = PragmaFunction::PragmaCall("unuse_bitmap", PragmaUnuse, {});
+    ExtensionUtil::RegisterFunction(db_instance, unuse_func);
+
 }
 
 void DebitExtension::Load(DuckDB &db) {

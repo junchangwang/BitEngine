@@ -105,7 +105,13 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	D_ASSERT(!column_ids.empty());
 	auto &g_state = input.global_state.Cast<TableScanGlobalSourceState>();
 	auto &l_state = input.local_state.Cast<TableScanLocalSourceState>();
-	
+
+	if (context.client.query_source == "use_bitmap") {
+		static BMTableScan bm_table_scan;
+		SourceResultType res = bm_table_scan.Table_Scan(context, chunk, bind_data.get()->Cast<TableScanBindData>(), *this);
+		return res;
+	}               
+
 	if(context.client.query_source == "bm_tpch") {
 		static BMTableScan bm_table_scan;
 		
@@ -191,7 +197,11 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		return SourceResultType::FINISHED;
 	}
 
-
+	if(context.client.GetCurrentQuery() == "SELECT count(l_quantity) FROM lineitem WHERE l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-12-25' AS date)  AND l_quantity < 4;") {
+		static BMTableScan bm_table_scan;
+		bm_table_scan.Projection_test(context, *this);
+		return SourceResultType::FINISHED;
+	}
 
 	if (context.client.GetCurrentQuery() == "SELECT r_name,sum(l_extendedprice * (1 - l_discount)) AS revenue FROM customer,orders,lineitem,nation,region WHERE l_orderkey = o_orderkey AND o_custkey = c_custkey AND c_nationkey = n_nationkey AND n_regionkey = r_regionkey AND l_orderkey % 10 < 1 GROUP BY r_name ORDER BY revenue DESC;"){
 		static BMTableScan bm_table_scan;

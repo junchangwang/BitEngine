@@ -130,7 +130,7 @@ public:
 	//! Disable query profiling
 	DUCKDB_API void DisableProfiling();
 
-	Table_config *Make_Config(std::string name, int cardinality, std::string file_format = "bm", int zip_num = 1, bool segmented_btv = true, bool is_lazyload = false, Index_encoding encoding = Index_encoding::EE, int group_length = 0);
+	Table_config *Make_Config(std::string name, int min_value_EE, int cardinality, std::string file_format = "bm", int zip_num = 1, bool segmented_btv = true, bool is_lazyload = false, Index_encoding encoding = Index_encoding::EE, int group_length = 0);
 	int Read_BM(Table_config *config, BaseTable **basebitmap, uint64_t fixed_rows = 0);
 
 	//! Issue a query, returning a QueryResult. The QueryResult can be either a StreamQueryResult or a

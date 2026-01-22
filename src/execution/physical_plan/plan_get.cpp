@@ -185,17 +185,29 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		return proj;
 	}
 
-	auto &table_scan =
-	    Make<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types, column_ids,
-	                            op.projection_ids, op.names, std::move(table_filters), op.estimated_cardinality,
-	                            std::move(op.extra_info), std::move(op.parameters), std::move(op.virtual_columns));
-	auto &cast_table_scan = table_scan.Cast<PhysicalTableScan>();
-	cast_table_scan.dynamic_filters = op.dynamic_filters;
+	auto &table_scan_op =
+		Make<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types, column_ids,
+								op.projection_ids, op.names, std::move(table_filters), op.estimated_cardinality,
+								std::move(op.extra_info), std::move(op.parameters), std::move(op.virtual_columns));
+
+	auto &table_scan = table_scan_op.Cast<PhysicalTableScan>();
+
+	// only when the extension pragma enabled it (PRAGMA use_bitmap)
+	if (context.query_source == "use_bitmap" && table_scan.table_filters) {
+		table_scan.use_bitmap_columns.assign(table_scan.column_ids.size(), false);
+		for (auto &entry : table_scan.table_filters->filters) {
+			idx_t col_idx = entry.first;
+			if (col_idx < table_scan.use_bitmap_columns.size()) {
+				table_scan.use_bitmap_columns[col_idx] = true;
+			}
+		}
+	}
+	table_scan.dynamic_filters = op.dynamic_filters;
 	if (filter) {
-		filter->children.push_back(table_scan);
+		filter->children.push_back(table_scan_op);
 		return *filter;
 	}
-	return table_scan;
+	return table_scan_op;
 }
 
 } // namespace duckdb

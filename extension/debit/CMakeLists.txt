@@ -38,6 +38,8 @@ set(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/DuckdbSIMD.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/groupbyTest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/hashjoin.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/projectionTest.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/executor/TableScan.cpp
     
 )
 
