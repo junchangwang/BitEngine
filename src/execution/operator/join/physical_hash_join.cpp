@@ -24,6 +24,8 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
+#include "execution/tpch/bitmap_hash_join.hpp"
+
 namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
@@ -989,6 +991,14 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
 		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_output, chunk);
 		return OperatorResultType::NEED_MORE_INPUT;
+	}
+
+	if(context.client.query_source == "use_bitmap") {
+		static BMHashJoin bm_hash_join;
+		string probe_col_name = bm_hash_join.getJoinName(this, "probe");
+		if (probe_col_name != "no_match") {
+			bm_hash_join.probeBitmap(context, *sink.hash_table, *this, probe_col_name);
+		}
 	}
 
 	if (sink.perfect_join_executor) {

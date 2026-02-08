@@ -116,6 +116,14 @@ public:
 
 	std::string query_source = "tpch";
 
+	std::unique_ptr<ibis::bitvector> btv_last_pipeline;
+
+	std::unordered_set<std::string> bitmap_probe_done;
+
+	vector<ibis::bitvector> bitmap_vector_pool;
+
+	idx_t fetch_count = 0;
+
 public:
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();

@@ -149,6 +149,8 @@ void BMTableScan::Table_Scan_GetRowids(ExecutionContext &context, vector<row_t> 
             ptr = dynamic_cast<rabit::Rabit *>(context.client.bitmap_discount);
         } else if (col_name == "l_quantity") {
             ptr = dynamic_cast<rabit::Rabit *>(context.client.bitmap_quantity);
+        } else if (col_name == "o_orderdate") {
+            ptr = dynamic_cast<rabit::Rabit *>(context.client.bitmap_orderdate);
         }
         // TODO: add more bitmap columns here
 
@@ -156,6 +158,7 @@ void BMTableScan::Table_Scan_GetRowids(ExecutionContext &context, vector<row_t> 
             LogicalType col_type = LogicalType::INVALID;
             col_type = bind_data.table.GetTypes()[base_col];
             rabit_list.emplace_back(entry.second.get(), ptr, col_type);
+            num_idlist = ptr->g_number_of_rows;
         }
     }
     bool first = true;
@@ -176,50 +179,70 @@ void BMTableScan::Table_Scan_GetRowids(ExecutionContext &context, vector<row_t> 
         }
     }
 
-    GetRowids(final_btv, row_ids);
+    // GetRowids(final_btv, row_ids);
 
+    context.client.btv_last_pipeline = std::make_unique<ibis::bitvector>(final_btv);
 }
 
-SourceResultType BMTableScan::Table_Scan(ExecutionContext &context, DataChunk &chunk, const TableScanBindData &bind_data, const PhysicalTableScan &op)
-{
-	if(*cursor == 0) {
-			Table_Scan_GetRowids(context, row_ids, bind_data, op);
-			num_idlist = row_ids->size();
-		}
+// SourceResultType BMTableScan::Table_Scan(ExecutionContext &context, DataChunk &chunk, const TableScanBindData &bind_data, const PhysicalTableScan &op)
+// {
+// 	if(*cursor == 0) {
+//         Table_Scan_GetRowids(context, row_ids, bind_data, op);
+//         num_idlist = row_ids->size();
+// 	}
 		
-		if(*cursor < row_ids->size()) {
+//     if(*cursor < row_ids->size()) {
+//         vector<StorageIndex> storage_column_ids;
+//         for (auto &sel_id : op.projection_ids) {
+//             storage_column_ids.push_back(StorageIndex(op.column_ids[sel_id].GetPrimaryIndex()));
+//         }
+//         TableScanState local_storage_state;
+//         local_storage_state.Initialize(storage_column_ids);
+//         ColumnFetchState column_fetch_state;
 
-			vector<StorageIndex> storage_column_ids;
-            for (auto &sel_id : op.projection_ids) {
-                storage_column_ids.push_back(StorageIndex(op.column_ids[sel_id].GetPrimaryIndex()));
-            }
+//         auto &table_bind_data = bind_data;
+//         auto &transaction = DuckTransaction::Get(context.client, table_bind_data.table.catalog);
 
-			TableScanState local_storage_state;
-			local_storage_state.Initialize(storage_column_ids);
-			ColumnFetchState column_fetch_state;
+//         data_ptr_t row_ids_data = nullptr;
+//         row_ids_data = (data_ptr_t)&((*row_ids)[*cursor]);
+//         Vector row_ids_vec(LogicalType::ROW_TYPE, row_ids_data);
+//         idx_t fetch_count = 2048;
+//         if(*cursor + fetch_count > row_ids->size()) {
+//             fetch_count = row_ids->size() - *cursor;
+//         }
 
-			auto &table_bind_data = bind_data;
-			auto &transaction = DuckTransaction::Get(context.client, table_bind_data.table.catalog);
+//         table_bind_data.table.GetStorage().BMFetch(transaction, chunk, storage_column_ids, row_ids_vec, fetch_count,
+//                                             column_fetch_state, num_idlist);                                  
+//         *cursor += fetch_count;
+//         return SourceResultType::HAVE_MORE_OUTPUT;
+//     }
+//     else {
+//         row_ids->clear();
+//         *cursor = 0;
 
-			data_ptr_t row_ids_data = nullptr;
-			row_ids_data = (data_ptr_t)&((*row_ids)[*cursor]);
-			Vector row_ids_vec(LogicalType::ROW_TYPE, row_ids_data);
-			idx_t fetch_count = 2048;
-			if(*cursor + fetch_count > row_ids->size()) {
-				fetch_count = row_ids->size() - *cursor;
-			}
+//         return SourceResultType::FINISHED;
+//     }
+// }
 
-			table_bind_data.table.GetStorage().BMFetch(transaction, chunk, storage_column_ids, row_ids_vec, fetch_count,
-                                                column_fetch_state, num_idlist);
-			*cursor += fetch_count;
-			return SourceResultType::HAVE_MORE_OUTPUT;
-		}
-		else {
-			row_ids->clear();
-            *cursor = 0;
-
-            return SourceResultType::FINISHED;
-		}
+SourceResultType BMTableScan::Table_Scan(ExecutionContext &context, DataChunk &chunk, const TableScanBindData &bind_data, const PhysicalTableScan &op)
+{   
+	if(*cursor == 0) {
+        Table_Scan_GetRowids(context, row_ids, bind_data, op);
+	}
+		
+    if(*cursor < num_idlist) {
+        idx_t fetch_count = 2048;
+        if(*cursor + fetch_count > num_idlist) {
+            fetch_count = num_idlist - *cursor;
+        }
+        *cursor += fetch_count;
+        return SourceResultType::HAVE_MORE_OUTPUT;
+    }
+    else {
+        row_ids->clear();
+        *cursor = 0;
+        return SourceResultType::FINISHED;
+    }
 }
 
 

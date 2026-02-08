@@ -50,9 +50,9 @@ static void PragmaLoadBitmap(ClientContext &context, const FunctionParameters &p
             state = context.Read_BM(config_shipdate_GE, &context.bitmap_shipdate_GE, 59986052);
         }
         else if (input_value == "orderdate") {
-            Table_config * config_orderdate = context.Make_Config(input_value, 8034, 10440, "bm", 1, true);
+            Table_config * config_orderdate = context.Make_Config(input_value, 8034, 10440, "bm", 1, false);
             // Table_config * config_orderdate = context.Make_Config(input_value, 10440, "bm", 1, true, false, Index_encoding::GE, 364);
-            state = context.Read_BM(config_orderdate, &context.bitmap_orderdate, 59986052);
+            state = context.Read_BM(config_orderdate, &context.bitmap_orderdate, 15000000);
         } 
         else if (input_value == "discount") {
             Table_config * config_discount = context.Make_Config(input_value, 0, 11, "bm", 1, false);

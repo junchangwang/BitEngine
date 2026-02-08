@@ -106,10 +106,10 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	auto &g_state = input.global_state.Cast<TableScanGlobalSourceState>();
 	auto &l_state = input.local_state.Cast<TableScanLocalSourceState>();
 
-	if (context.client.query_source == "use_bitmap") {
+	if (context.client.query_source == "use_bitmap" &&!use_bitmap_columns.empty()) {
 		static BMTableScan bm_table_scan;
 		SourceResultType res = bm_table_scan.Table_Scan(context, chunk, bind_data.get()->Cast<TableScanBindData>(), *this);
-		return res;
+		// return res;
 	}               
 
 	if(context.client.query_source == "bm_tpch") {

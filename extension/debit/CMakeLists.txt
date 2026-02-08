@@ -39,7 +39,13 @@ set(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/groupbyTest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/hashjoin.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/test/projectionTest.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/executor/TableScan.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/operator/TableScan.cpp
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/bitmap_hash_join.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/operator/HashJoin.cpp
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/bitmap_groupby.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/execution/operator/GroupBy.cpp
     
 )
 

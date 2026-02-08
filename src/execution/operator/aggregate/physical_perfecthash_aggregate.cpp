@@ -5,6 +5,8 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include "execution/tpch/bitmap_groupby.hpp"
+
 namespace duckdb {
 
 PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &context, vector<LogicalType> types_p,
@@ -115,11 +117,20 @@ unique_ptr<LocalSinkState> PhysicalPerfectHashAggregate::GetLocalSinkState(Execu
 }
 
 SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, DataChunk &chunk,
-                                                  OperatorSinkInput &input) const {
+                                                  OperatorSinkInput &input) const {												
 	auto &lstate = input.local_state.Cast<PerfectHashAggregateLocalState>();
 	DataChunk &group_chunk = lstate.group_chunk;
 	DataChunk &aggregate_input_chunk = lstate.aggregate_input_chunk;
-
+	
+	if (context.client.query_source == "use_bitmap") {
+		// We use Q1 to test the bmgroup function
+		BMGroupBy bitmap_groupby;
+		vector<string> group_names;
+		group_names.push_back("l_returnflag");
+		group_names.push_back("l_linestatus");
+		bitmap_groupby.BM_PerfectHashGroupBy(context, group_names);
+	}
+												
 	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
 		auto &group = groups[group_idx];
 		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);

@@ -192,16 +192,37 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 
 	auto &table_scan = table_scan_op.Cast<PhysicalTableScan>();
 
-	// only when the extension pragma enabled it (PRAGMA use_bitmap)
-	if (context.query_source == "use_bitmap" && table_scan.table_filters) {
-		table_scan.use_bitmap_columns.assign(table_scan.column_ids.size(), false);
+	if (table_scan.table_filters) {
+		static const unordered_set<string> allowed_bitmap_columns = {
+		"l_shipdate", "l_discount", "l_quantity", "o_orderdate"};
+	
+		bool all_allowed = true;
 		for (auto &entry : table_scan.table_filters->filters) {
 			idx_t col_idx = entry.first;
-			if (col_idx < table_scan.use_bitmap_columns.size()) {
-				table_scan.use_bitmap_columns[col_idx] = true;
+			if (col_idx >= table_scan.column_ids.size()) {
+				all_allowed = false;
+				break;
+			}
+			idx_t base_col = table_scan.column_ids[col_idx].GetPrimaryIndex();
+			string col_name = base_col < table_scan.names.size() ? table_scan.names[base_col]
+																	: to_string((long long)base_col);
+			if (allowed_bitmap_columns.find(col_name) == allowed_bitmap_columns.end()) {
+				all_allowed = false;
+				break;
+			}
+		}
+
+		if (all_allowed) {
+			table_scan.use_bitmap_columns.assign(table_scan.column_ids.size(), false);
+			for (auto &entry : table_scan.table_filters->filters) {
+				idx_t col_idx = entry.first;
+				if (col_idx < table_scan.use_bitmap_columns.size()) {
+					table_scan.use_bitmap_columns[col_idx] = true;
+				}
 			}
 		}
 	}
+
 	table_scan.dynamic_filters = op.dynamic_filters;
 	if (filter) {
 		filter->children.push_back(table_scan_op);
