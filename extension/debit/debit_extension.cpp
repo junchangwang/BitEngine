@@ -22,7 +22,7 @@ static void PragmaLoadBitmap(ClientContext &context, const FunctionParameters &p
     int sf = 10;
     int state = -1;
     /*
-    (shipdate, linestatus, returnflag) for Q1(seg_btv)
+    (shipdate, linestatus, returnflag) for Q1
     (shipdate, shipdate_GE, orderkey) for Q3
     (orderkey) for Q4
     (orderkey) for Q5
@@ -41,8 +41,8 @@ static void PragmaLoadBitmap(ClientContext &context, const FunctionParameters &p
         std::cout << "Loading bitmap: " << input_value << std::endl;
 
         if (input_value == "shipdate") {
-            // Table_config * config_shipdate = context.Make_Config(input_value, 10562, "bm", 1, false);
-            Table_config * config_shipdate = context.Make_Config(input_value, 10562, "bm", 1, false, false, Index_encoding::GE, 364);
+            Table_config * config_shipdate = context.Make_Config(input_value, 10562, "bm", 1, false);
+            // Table_config * config_shipdate = context.Make_Config(input_value, 10562, "bm", 1, false, false, Index_encoding::GE, 364);
             state = context.Read_BM(config_shipdate, &context.bitmap_shipdate, 59986052);
         }
         else if (input_value == "shipdate_GE") {

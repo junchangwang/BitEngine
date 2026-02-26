@@ -219,6 +219,73 @@ inline void q1_exe_aggregation(int64_t *quantity_ptr, int64_t *price_ptr, int64_
 #endif
 }
 
+inline void q1_exe_aggregation_batch(int64_t *quantity_ptr, int64_t *price_ptr, int64_t *discount_ptr, int64_t *tax_ptr, uint16_t base,
+                                     const std::vector<uint8_t> &reverse_table_values, const std::vector<q1_data*> &sums) {
+#if defined(__AVX512F__)
+    if (reverse_table_values.size() < 4 || sums.size() < 4) {
+        return;
+    }
+
+    __m512i quantity = _mm512_loadu_epi64(quantity_ptr + base);
+
+
+    __m512i index_quantity = _mm512_maskz_compress_epi64(reverse_table_values[0], quantity);
+    sums[0]->sum_qty += _mm512_reduce_add_epi64(index_quantity);
+
+	index_quantity = _mm512_maskz_compress_epi64(reverse_table_values[1], quantity);
+    sums[1]->sum_qty += _mm512_reduce_add_epi64(index_quantity);
+
+	index_quantity = _mm512_maskz_compress_epi64(reverse_table_values[2], quantity);
+    sums[2]->sum_qty += _mm512_reduce_add_epi64(index_quantity);
+
+	index_quantity = _mm512_maskz_compress_epi64(reverse_table_values[3], quantity);
+    sums[3]->sum_qty += _mm512_reduce_add_epi64(index_quantity);
+
+
+    __m512i price = _mm512_loadu_epi64(price_ptr + base);
+	__m512i discount = _mm512_loadu_epi64(discount_ptr + base);
+	__m512i tax = _mm512_loadu_epi64(tax_ptr + base);
+
+
+    __m512i index_price = _mm512_maskz_compress_epi64(reverse_table_values[0], price);
+    sums[0]->sum_base_price += _mm512_reduce_add_epi64(index_price);
+	__m512i index_discount = _mm512_maskz_compress_epi64(reverse_table_values[0], discount);
+    sums[0]->sum_discount += _mm512_reduce_add_epi64(index_discount);
+	__m512i index_disc_price = _mm512_mullo_epi64(index_price, _mm512_sub_epi64(_mm512_set1_epi64(100), index_discount));
+    sums[0]->sum_disc_price += _mm512_reduce_add_epi64(index_disc_price);
+	__m512i index_charge = _mm512_mullo_epi64(index_disc_price, _mm512_add_epi64(_mm512_set1_epi64(100), tax));
+    sums[0]->sum_charge += _mm512_reduce_add_epi64(index_charge);
+
+	index_price = _mm512_maskz_compress_epi64(reverse_table_values[1], price);
+    sums[1]->sum_base_price += _mm512_reduce_add_epi64(index_price);
+	index_discount = _mm512_maskz_compress_epi64(reverse_table_values[1], discount);
+    sums[1]->sum_discount += _mm512_reduce_add_epi64(index_discount);
+	index_disc_price = _mm512_mullo_epi64(index_price, _mm512_sub_epi64(_mm512_set1_epi64(100), index_discount));
+    sums[1]->sum_disc_price += _mm512_reduce_add_epi64(index_disc_price);
+	index_charge = _mm512_mullo_epi64(index_disc_price, _mm512_add_epi64(_mm512_set1_epi64(100), tax));
+    sums[1]->sum_charge += _mm512_reduce_add_epi64(index_charge);
+
+    index_price = _mm512_maskz_compress_epi64(reverse_table_values[2], price);
+    sums[2]->sum_base_price += _mm512_reduce_add_epi64(index_price);
+	index_discount = _mm512_maskz_compress_epi64(reverse_table_values[2], discount);
+    sums[2]->sum_discount += _mm512_reduce_add_epi64(index_discount);
+	index_disc_price = _mm512_mullo_epi64(index_price, _mm512_sub_epi64(_mm512_set1_epi64(100), index_discount));
+    sums[2]->sum_disc_price += _mm512_reduce_add_epi64(index_disc_price);
+	index_charge = _mm512_mullo_epi64(index_disc_price, _mm512_add_epi64(_mm512_set1_epi64(100), tax));
+    sums[2]->sum_charge += _mm512_reduce_add_epi64(index_charge);
+
+	index_price = _mm512_maskz_compress_epi64(reverse_table_values[3], price);
+    sums[3]->sum_base_price += _mm512_reduce_add_epi64(index_price);
+    index_discount = _mm512_maskz_compress_epi64(reverse_table_values[3], discount);
+    sums[3]->sum_discount += _mm512_reduce_add_epi64(index_discount);
+	index_disc_price = _mm512_mullo_epi64(index_price, _mm512_sub_epi64(_mm512_set1_epi64(100), index_discount));
+    sums[3]->sum_disc_price += _mm512_reduce_add_epi64(index_disc_price);
+    index_charge = _mm512_mullo_epi64(index_disc_price, _mm512_add_epi64(_mm512_set1_epi64(100), tax));
+    sums[3]->sum_charge += _mm512_reduce_add_epi64(index_charge);
+#else
+#endif
+}
+
 bool q1_using_bitmap = 1;
 bool q1_using_idlist = 0;
 bool q1_using_segment = 0;
@@ -630,14 +697,12 @@ void BMTableScan::BMTPCH_Q1(ExecutionContext &context, const PhysicalTableScan &
 				storage_column_ids.push_back(StorageIndex(5));
 				storage_column_ids.push_back(StorageIndex(6));
 				storage_column_ids.push_back(StorageIndex(7));
-				storage_column_ids.push_back(StorageIndex(10));
 				lineitem_table.GetStorage().InitializeScan(context.client, lineitem_transaction, lineitem_scan_state, storage_column_ids);
 				vector<LogicalType> types;
 				types.push_back(lineitem_table.GetColumns().GetColumnTypes()[4]);
 				types.push_back(lineitem_table.GetColumns().GetColumnTypes()[5]);
 				types.push_back(lineitem_table.GetColumns().GetColumnTypes()[6]);
 				types.push_back(lineitem_table.GetColumns().GetColumnTypes()[7]);
-				types.push_back(lineitem_table.GetColumns().GetColumnTypes()[10]);
 
 				std::map<std::pair<char, char>, std::pair<vector<row_t>, int64_t> > ids_map;
 				std::map<std::pair<char, char>, std::pair<vector<uint32_t>*, uint8_t *> > rabit_res_map;
@@ -651,43 +716,6 @@ void BMTableScan::BMTPCH_Q1(ExecutionContext &context, const PhysicalTableScan &
 
 				auto stb = std::chrono::high_resolution_clock::now();
 
-				// ibis::bitvector shipdate_res;
-				// shipdate_res.copy(*rabit_shipdate->Btvs[rabit_shipdate->config->g_cardinality - 1]->btv);
-				// shipdate_res.decompress();
-				// // compute l_shipdate > CAST('1998-09-02' AS date)
-				// for(int i = rabit_shipdate->config->g_cardinality - 2; i > right_days; i--)
-				// 	shipdate_res |= *rabit_shipdate->Btvs[i]->btv;
-					
-				// // invert the result (get l_shipdate <= CAST('1998-09-02' AS date))
-				// flip_bitvector(&shipdate_res);
-
-				// for(int i = 0; i < rabit_linestatus->config->g_cardinality; i++) {
-				// 	for(int r = 0; r < rabit_returnflag->config->g_cardinality; r++) {
-				// 		if (i == 0 && r > 0) {
-				// 			continue;
-				// 		}
-				// 		ibis::bitvector ttt_res, g_res;
-				// 		ttt_res.copy(*rabit_linestatus->Btvs[i]->btv);
-				// 		g_res.copy(*rabit_returnflag->Btvs[r]->btv);
-				// 		ttt_res.decompress();
-				// 		g_res.decompress();
-
-				// 		ttt_res &= g_res;
-				// 		ttt_res &= shipdate_res;
-
-				// 		uint64_t count = ttt_res.count();
-
-				// 		assert(count > 0);
-
-				// 		vector<uint32_t> *btv_res = reduce_leadingbits(ttt_res);
-
-				// 		rabit_res_map[{returnflag_map[r], linestatus_map[i]}].first = btv_res;
-				// 		rabit_res_map[{returnflag_map[r], linestatus_map[i]}].second = (uint8_t *)&((*btv_res)[0]);
-				// 		q1_ans[{returnflag_map[r], linestatus_map[i]}].count_order = count;
-
-				// 	}
-				// }
-
 				ibis::bitvector shipdate_res;
 				shipdate_res.copy(*rabit_shipdate->Btvs[rabit_shipdate->config->g_cardinality - 1]->btv);
 				shipdate_res.decompress();
@@ -698,7 +726,6 @@ void BMTableScan::BMTPCH_Q1(ExecutionContext &context, const PhysicalTableScan &
 				// invert the result (get l_shipdate <= CAST('1998-09-02' AS date))
 				flip_bitvector(&shipdate_res);
 
-				vector<uint32_t> *btv_shipdate = reduce_leadingbits(shipdate_res);
 				for(int i = 0; i < rabit_linestatus->config->g_cardinality; i++) {
 					for(int r = 0; r < rabit_returnflag->config->g_cardinality; r++) {
 						if (i == 0 && r > 0) {
@@ -709,27 +736,22 @@ void BMTableScan::BMTPCH_Q1(ExecutionContext &context, const PhysicalTableScan &
 						g_res.copy(*rabit_returnflag->Btvs[r]->btv);
 						ttt_res.decompress();
 						g_res.decompress();
-						
-						vector<uint32_t> *btv_res = reduce_leadingbits(ttt_res);
-						vector<uint32_t> *btv_returnflag = reduce_leadingbits(g_res);
-						
-						// bit_and(&(*btv_res)[0], &(*btv_returnflag)[0], btv_res->size());
-						// bit_and(&(*btv_res)[0], &(*btv_shipdate)[0], btv_res->size());
 
-						triple_bit_and(&(*btv_res)[0], &(*btv_returnflag)[0], &(*btv_shipdate)[0], btv_res->size());
+						ttt_res &= g_res;
+						ttt_res &= shipdate_res;
 
-						size_t count = ttt_res.count();
+						uint64_t count = ttt_res.count();
 
 						assert(count > 0);
+
+						vector<uint32_t> *btv_res = reduce_leadingbits(ttt_res);
 
 						rabit_res_map[{returnflag_map[r], linestatus_map[i]}].first = btv_res;
 						rabit_res_map[{returnflag_map[r], linestatus_map[i]}].second = (uint8_t *)&((*btv_res)[0]);
 						q1_ans[{returnflag_map[r], linestatus_map[i]}].count_order = count;
 
-						delete btv_returnflag;
 					}
 				}
-				delete btv_shipdate;
 
 				auto etb = std::chrono::high_resolution_clock::now();
 				timeb += std::chrono::duration_cast<std::chrono::nanoseconds>(etb - stb).count();
@@ -737,6 +759,8 @@ void BMTableScan::BMTPCH_Q1(ExecutionContext &context, const PhysicalTableScan &
 
 				int64_t cursor = 0;
 				int64_t offset = 0;
+				std::vector<uint8_t> reverse_table_values;
+				std::vector<q1_data*> q1_ans_pointers;
 				while(true) {
 					DataChunk result;
 					result.Initialize(context.client, types);
@@ -747,51 +771,62 @@ void BMTableScan::BMTPCH_Q1(ExecutionContext &context, const PhysicalTableScan &
 					offset = cursor;
 					cursor += result.size();
 
-
-
 					auto &quantity = result.data[0];
 					auto &extendedprice = result.data[1];
 					auto &discount = result.data[2];
 					auto &tax = result.data[3];
-					auto &days = result.data[4];
 
 					auto quantity_data = FlatVector::GetData<int64_t>(quantity);
 					auto extendedprice_data = FlatVector::GetData<int64_t>(extendedprice);
 					auto discount_data = FlatVector::GetData<int64_t>(discount);
 					auto tax_data = FlatVector::GetData<int64_t>(tax);
-					auto days_data = FlatVector::GetData<int32_t>(days);
-
 
 					auto st1 = std::chrono::high_resolution_clock::now();
 					
-					for(auto &ids_it : rabit_res_map) {
-                        auto &btv_it = ids_it.second.second;
-                        auto &ans_it = q1_ans[ids_it.first];
-                        uint16_t base = 0;
 
-                        while(base + 7 < result.size() ) {
-                            q1_exe_aggregation(quantity_data, extendedprice_data, discount_data, tax_data,\
-                                                base, reverse_table[*btv_it], q1_ans[ids_it.first]);
-                            btv_it++;
-                            base += 8;
-                        }
+					for (auto &ids_it : rabit_res_map) {
+						auto &ans_it = q1_ans[ids_it.first];
+						q1_ans_pointers.push_back(&q1_ans[ids_it.first]);
+					}
 
-                        if(base < result.size()) {
-                            uint8_t bits = *btv_it;
-                            while(base < result.size()) {
-                                if( bits & 0x80 ) {
-                                    ans_it.sum_qty += quantity_data[base];
-                                    ans_it.sum_discount += discount_data[base];
-                                    ans_it.sum_base_price += extendedprice_data[base];
-                                    ans_it.sum_disc_price += extendedprice_data[base]*(100 - discount_data[base]);
-                                    ans_it.sum_charge += extendedprice_data[base]*(100 - discount_data[base]) *(100 + tax_data[base]);
-                                }
-                                base++;
-                                bits <<= 1;
-                            }
-                        }
-                    }
-					
+					uint16_t base = 0;
+					while (base + 7 < result.size()) {
+						for (auto &ids_it : rabit_res_map) {
+							auto &btv_it = ids_it.second.second;
+							reverse_table_values.push_back(reverse_table[*btv_it]);
+						}
+
+						q1_exe_aggregation_batch(quantity_data, extendedprice_data, discount_data, tax_data, base, reverse_table_values, q1_ans_pointers);
+
+						for (auto &ids_it : rabit_res_map) {
+							auto &btv_it = ids_it.second.second;
+							btv_it++;
+						}
+
+						base += 8;
+						reverse_table_values.clear();
+					}
+
+					for (auto &ids_it : rabit_res_map) {
+						auto &btv_it = ids_it.second.second;
+						auto &ans_it = q1_ans[ids_it.first];
+						uint16_t remain_base = base;
+						if (remain_base < result.size()) {
+							uint8_t bits = *btv_it;
+							while (remain_base < result.size()) {
+								if (bits & 0x80) {
+									ans_it.sum_qty += quantity_data[remain_base];
+									ans_it.sum_discount += discount_data[remain_base];
+									ans_it.sum_base_price += extendedprice_data[remain_base];
+									ans_it.sum_disc_price += extendedprice_data[remain_base] * (100 - discount_data[remain_base]);
+									ans_it.sum_charge += extendedprice_data[remain_base] * (100 - discount_data[remain_base]) * (100 + tax_data[remain_base]);
+								}
+								remain_base++;
+								bits <<= 1;
+							}
+						}
+					}
+
 					auto et1 = std::chrono::high_resolution_clock::now();
 					time1 += std::chrono::duration_cast<std::chrono::nanoseconds>(et1 - st1).count();
 				
