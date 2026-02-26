@@ -4,7 +4,7 @@ project(DebitExtension)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../src/include/)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/CUBIT-dev/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/CUBIT-d/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/dbgen/include)
 
 
@@ -14,10 +14,10 @@ add_compile_options(-mavx512f -march=native)
 
 set(FILES 
     ${CMAKE_CURRENT_SOURCE_DIR}/debit_extension.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/CUBIT-dev/src/utils/util.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/CUBIT-dev/src/bitmaps/base_table.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/CUBIT-dev/src/bitmaps/rabit/table.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/CUBIT-dev/src/fastbit/bitvector.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CUBIT-d/src/utils/util.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CUBIT-d/src/bitmaps/base_table.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CUBIT-d/src/bitmaps/rabit/table.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CUBIT-d/src/fastbit/bitvector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dbgen/bm_dbgen.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/dbgen/bmtpch_constants.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/execution/tpch/bitmap_table_scan.cpp
