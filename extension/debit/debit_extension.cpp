@@ -9,9 +9,9 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "utils/util.h"         
-#include "CUBIT-dev/src/bitmaps/base_table.h"  
-#include "CUBIT-dev/src/bitmaps/rabit/table.h" 
-#include "CUBIT-dev/src/fastbit/bitvector.h"  
+#include "bitmaps/base_table.h"  
+#include "bitmaps/rabit/table.h" 
+#include "fastbit/bitvector.h"  
               
 
 #endif

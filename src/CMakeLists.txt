@@ -110,7 +110,7 @@ else()
       duckdb_mbedtls
       duckdb_yyjson
       duckdb_zstd
-      ${CMAKE_CURRENT_SOURCE_DIR}/../extension/debit/CUBIT-dev/build/libbitmap.a)
+      ${CMAKE_CURRENT_SOURCE_DIR}/../extension/debit/CUBIT-d/build/libbitmap.a)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb PUBLIC ${DUCKDB_LINK_LIBS} pthread atomic ${Boost_LIBRARIES} ${URCU_LIBRARIES})
