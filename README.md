@@ -26,3 +26,6 @@ pragma load_bitmap(shipdate,discount,quantity);
 pragma tpch(6);
 ```
 
+### How to download the bitmap files?
+You can download the compressed file of bitmap under `https://github.com/junchangwang/Bitmap-dataset.git` and extract it to the root directory of your project for use.The bitmap files are located in the "BITMAPS" folder.
+
