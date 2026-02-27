@@ -35,3 +35,6 @@ Below are the required bitmap columns for each supported TPCH query in DEBIT:
 - (shipdate_GE_30) for Q14
 
 You can view all the logic of bmquery under `extension/debit/execution/tpch/query`.
+
+### How to download the bitmap files?
+You can download the compressed file of bitmap under `https://github.com/junchangwang/Bitmap-dataset.git` and extract it to the root directory of your project for use.The bitmap files are located in the "BITMAPS" folder.
