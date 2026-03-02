@@ -35,6 +35,7 @@ DEBIT currently supports TPCH Q1, Q5, Q6, and Q14.
 For example, if you want to run Q1, you can use the following command in DuckDB:
 
 ```DuckDB
+set threads to 1;
 pragma load_bitmap(shipdate, linestatus, returnflag);
 pragma bm_tpch(1);
 ```
@@ -47,9 +48,8 @@ pragma tpch(1);
 Below are the required bitmap columns for each supported TPCH query in DEBIT:
   
 - (shipdate, linestatus, returnflag) for Q1
-- (orderkey) for Q5
-- (shipdate_GE_364, discount, quantity) for Q6
-- (shipdate_GE_30) for Q14
+- (orderkey, suppkey) for Q5
+- (shipdate_GE, discount, quantity) for Q6
 
 You can view all the logic of bmquery under `extension/debit/execution/tpch/query`.
 
