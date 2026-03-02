@@ -35,7 +35,7 @@ load tpch;
 CALL dbgen(sf = 10);
 ```
 
-3) Generate bitmap instances for the TPCH dataset on your side (see `extension/debit/dbgen` for details). However, we strongly suggest downloading the pre-generated bitmap files using the following commands.
+3) Generate bitmap instances for the TPCH dataset on your side (see CUBIT project for details). However, we strongly suggest downloading the pre-generated bitmap files using the following commands.
 
 ```sh
 
