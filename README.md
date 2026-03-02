@@ -35,12 +35,19 @@ load tpch;
 CALL dbgen(sf = 10);
 ```
 
-3) Generate bitmap instances for the TPCH dataset on your side (see CUBIT project for details). However, we strongly suggest downloading the pre-generated bitmap files using the following commands.
+3) Generate bitmap instances for the TPCH dataset on your side (see CUBIT project for details). However, we strongly suggest downloading the pre-generated bitmap files using the following commands.You can obtain all the required compressed bitmaps in the "BITMAPS" branch of the GitHub repository at `https://github.com/junchangwang/Bitmap-dataset.git`
 
 ```sh
-
-MISSING
+git clone --branch BITMAPS --single-branch https://github.com/junchangwang/Bitmap-dataset.git
 ```
+
+Then, by using the decompression script we provided, you will obtain a directory named "BITMAPS", which contains all the bitmap files.
+
+```sh
+python3 decompress_tpch.py
+```
+
+Now, Move the corresponding bitmap file to the root directory of the BitEngine project, and it will be usable.
 
 4) Load the corresponding bitmap instances in DuckDB before you execute the TPCH queries. 
 
