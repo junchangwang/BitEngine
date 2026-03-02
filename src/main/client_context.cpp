@@ -193,7 +193,7 @@ Table_config* ClientContext::Make_Config(std::string name, int cardinality, std:
 	config->GE_group_len = group_length;
 	if(config->encoding == GE) {
 		// find directory name for group encoding
-		path.append("_GE_");
+		path.append("_");
 		path.append(to_string(group_length));
 		config->GROUP_PATH = path;
 	}

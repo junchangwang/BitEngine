@@ -16,7 +16,7 @@ namespace duckdb {
 
 void BMTableScan::TPCH_Q6_Lineitem_GetRowIds(ExecutionContext &context, vector<row_t> *row_ids)
 {
-	auto rabit_shipdate = dynamic_cast<rabit::Rabit *>(context.client.bitmap_shipdate);
+	auto rabit_shipdate = dynamic_cast<rabit::Rabit *>(context.client.bitmap_shipdate_GE);
 	auto rabit_discount = dynamic_cast<rabit::Rabit *>(context.client.bitmap_discount);
 	auto rabit_quantity = dynamic_cast<rabit::Rabit *>(context.client.bitmap_quantity);
 
