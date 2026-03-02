@@ -1,30 +1,30 @@
-### How to download the bitmap files?
-You can download the compressed file of bitmap under `https://github.com/junchangwang/Bitmap-dataset.git` and extract it to the root directory of your project for use.The bitmap files are located in the "BITMAPS" folder.
 
-### What is BitQ?
-BitQ is an implementation that runs bitmap queries by modifying or replacing the operators in duckdb.
-We mainly replaced the three operators: table scan, group by, and join. The specific implementation code can be found under `extension/debit/execution/operator`.
-### How to run BitQ？
+#### Introduction to BitQ
 
-First, you need to compile the CUBIT-d under extension/debit and the entire project.
+BitEngine is a bitmap-oriented query engine that leverages bitmap indexing to accelerate operators (see the main branch for details). BitQ embodies the implementation of BitEngine in analytical DBMSs (DuckDB).
 
-```sh
-cd extension/debit/CUBIT-d
-./build.sh
-```
 
-Second，after the compilation is finished, you can load the corresponding bitmap in DuckDB with the following commands：
+#### Code organization
 
-```DuckDB
-pragma load_bitmap(col_name1, col_name2);
-```
+The code of BitQ is organized in the `extension/debit/execution/operator` directory, which contains the implementation of various operators, including scan, group by, and join.
 
-BitQ needs to be activated through a command. Once activated, when you import the required bitmap, you can successfully execute the corresponding bitmap query.
-For example, if you want to run Q6, you can use the following command in DuckDB:
+
+#### How to run BitQ?
+
+1) Compile the code, generate TPC-H workloads and bitmap instances as in the main branch.
+
+2) Activate BitQ via the following command:
 
 ```DuckDB
 set threads to 1;
 pragma use_bitmap;
+```
+
+3) Load the required bitmaps, as in the main branch. Then you can execute BitQ using the following commands:
+
+```DuckDB
 pragma load_bitmap(shipdate,discount,quantity);
 pragma tpch(6);
 ```
+
+The above command will direct the query engine to select BitOperators, when possible, to execute the query.
