@@ -1,57 +1,75 @@
 
-### Introduction to BitEngine
+#### About BitEngine project
 
-The database community has long explored bitmap indexing in DBMSs, but most efforts failed to achieve widespread adoption. Traditional bitmap indexes are not general-purpose; they limit to scans on low-cardinality attributes within read-mostly workloads. A notable example is PostgreSQL, which introduced native bitmap indexes in version 8.3.23 but later removed them due to limitations.
+The database community has long explored bitmap indexing in DBMSs, but most efforts failed to achieve widespread adoption. The main reason is that traditional bitmap indexes limit to scans on low-cardinality attributes on read-only workloads. A notable example is PostgreSQL, which introduced native bitmap indexes in version 8.3.23 but later removed them due to these limitations.
 
-In recent years, researchers have proposed innovative bitmap index designs. Recent advances include update-friendly designs such as UpBit [1] and Cubit [2], with RABIT [3] extending support to high-cardinality attributes. For the first time, researchers can build bitmap indexes on attributes of any cardinality (from dozens to millions) in tables ranging from read-only to update-intensive [2,3]. These advances have sparked renewed interest in bitmap indexing, raising an interesting question: beyond traditionally acting as scan accelerators, to what extent can the state-of-the-art bitmap indexes be leveraged in DBMS query engines?
+In recent years, researchers have proposed innovative bitmap index designs. Recent advances include update-friendly designs such as UpBit [1] and Cubit [2], with RABIT [3] extending support to high-cardinality attributes. For the first time, researchers can build bitmap indexes on attributes of any cardinality (from dozens to millions) in tables ranging from read-only to update-intensive [2,3]. These advances have sparked interest in bitmap indexing, raising an interesting question: **beyond traditionally acting as scan accelerators, to what extent can the state-of-the-art bitmap indexes be leveraged in DBMS query engines**?
 
-BitEngine answers this by implementing a bitmap index-based query execution engine in DuckDB. At its core is a suite of bitmap-oriented operators for query execution, delivering benefits such as reduced I/O and intermediate data, improved SIMD utilization, and avoidance of costly materializations.
+To answer this, we develop BitEngine, a bitmap index-based query engine in DuckDB. At its core is a suite of bitmap-oriented operators, delivering benefits such as reduced I/O and intermediate data, improved SIMD utilization, and avoidance of costly materializations.
 
-
-[1] Manos Athanassoulis, Zheng Yan, Stratos Idreos. UpBit: Scalable In-Memory Updatable Bitmap Indexing. In SIGMOD'16.
-[2] Junchang Wang, Manos Athanassoulis. CUBIT: Concurrent Updatable Bitmap Indexing. In VLDB'24.
 [3] Junchang Wang, Fu Xiao, Manos Athanassoulis. RABIT: Efficient Range Queries with Bitmap Indexing. In SIGMOD'25.
+[2] Junchang Wang, Manos Athanassoulis. CUBIT: Concurrent Updatable Bitmap Indexing. In VLDB'24.
+[1] Manos Athanassoulis, Zheng Yan, Stratos Idreos. UpBit: Scalable In-Memory Updatable Bitmap Indexing. In SIGMOD'16.
 
 
 
+#### How is this project organized?
+
+BitEngine is currently implemented as a DuckDB extension to ensure portability along with DuckDB's rapid evolution. Its source code is located in the `extension/debit` directory. We primarily evaluated BitEngine using the TPC-H benchmark, both in the project and in the paper. The streamlined implementation of TPCH queries using BitEngine can be found in the `extension/debit/execution/tpch` directory. For example, the details of how BitEngine transforms a join into a predicate on foreign key columns and how the predicate is evaluated by using bitmaps for Q5 can be found in `extension/debit/execution/tpch/query/q5.cpp`, which corresponds to the logic described in the paper. (For implementations of independent operators supporting arbitrary queries, see the BitQ branch.)
 
 
-### How to run DEBIT？
 
-First, you need to compile the CUBIT-d under `extension/debit` and the entire project.
+#### How to run BitEngine？
+
+1) Please compile the bitmap index used in the project.
 
 ```sh
 cd extension/debit/CUBIT-d
 ./build.sh
 ```
 
-Second，after the compilation is finished, you can load the corresponding bitmap in DuckDB with the following commands：
+2) Compile DuckDB as usual. Generate a TPCH dataset with SF 10 using the following commands.
 
 ```DuckDB
-pragma load_bitmap(col_name1, col_name2);
+load tpch;
+CALL dbgen(sf = 10);
 ```
 
-DEBIT currently supports TPCH Q1, Q5, Q6, and Q14.
-For example, if you want to run Q1, you can use the following command in DuckDB:
+3) Generate bitmap instances for the TPCH dataset on your side (see `extension/debit/dbgen` for details). However, we strongly suggest downloading the pre-generated bitmap files using the following commands.
+
+```sh
+
+MISSING
+```
+
+4) Load the corresponding bitmap instances in DuckDB before you execute the TPCH queries. 
 
 ```DuckDB
 set threads to 1;
+pragma load_bitmap(col_name1, col_name2);
+```
+
+Below are the required bitmap indexes for each supported TPCH query in DEBIT:
+
+- Q1: shipdate, linestatus, returnflag
+- Q5: orderkey, suppkey
+- Q6: shipdate_GE, discount, quantity
+
+For example, if you want to run Q1, please use the following command in DuckDB prompt:
+
+```DuckDB
 pragma load_bitmap(shipdate, linestatus, returnflag);
 pragma bm_tpch(1);
 ```
-If you want to run the standard DuckDB TPCH queries, use the following command:
+
+You can also run TPC-H queries using the standard operators in DuckDB for comparison. For example, to run Q1 using the standard operators, you can use the following command:
 
 ```DuckDB
 pragma tpch(1);
 ```
 
-Below are the required bitmap columns for each supported TPCH query in DEBIT:
-  
-- (shipdate, linestatus, returnflag) for Q1
-- (orderkey, suppkey) for Q5
-- (shipdate_GE, discount, quantity) for Q6
 
-You can view all the logic of bmquery under `extension/debit/execution/tpch/query`.
 
-### How to download the bitmap files?
-You can download the compressed file of bitmap under `https://github.com/junchangwang/Bitmap-dataset.git` and extract it to the root directory of your project for use.The bitmap files are located in the "BITMAPS" folder.
+#### Acknowledgements
+
+If you have any questions about the code, please feel free to contact us.
