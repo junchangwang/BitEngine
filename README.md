@@ -19,7 +19,7 @@ BitEngine is currently implemented as a DuckDB extension to ensure portability a
 
 
 
-#### How to run BitEngine？
+#### How to run BitEngine?
 
 1) Please compile the bitmap index used in the project.
 
@@ -35,19 +35,14 @@ load tpch;
 CALL dbgen(sf = 10);
 ```
 
-3) Generate bitmap instances for the TPCH dataset on your side (see CUBIT project for details). However, we strongly suggest downloading the pre-generated bitmap files using the following commands.You can obtain all the required compressed bitmaps in the "BITMAPS" branch of the GitHub repository at `https://github.com/junchangwang/Bitmap-dataset.git`
+3) Generate bitmap instances for the TPCH dataset on your side (see CUBIT project for details). However, generating bitmap instances for the whole TPCH dataset takes hours, such that we strongly suggest downloading the required pre-generated bitmap instances from the following github repository.
 
 ```sh
 git clone --branch BITMAPS --single-branch https://github.com/junchangwang/Bitmap-dataset.git
-```
-
-Then, by using the decompression script we provided, you will obtain a directory named "BITMAPS", which contains all the bitmap files.
-
-```sh
+cd Bitmap-dataset
 python3 decompress_tpch.py
+mv BITMAPS/* /path/to/BitEngine/
 ```
-
-Now, Move the corresponding bitmap file to the root directory of the BitEngine project, and it will be usable.
 
 4) Load the corresponding bitmap instances in DuckDB before you execute the TPCH queries. 
 
