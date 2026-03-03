@@ -21,6 +21,8 @@ BitEngine is currently implemented as a DuckDB extension to ensure portability a
 
 #### How to run BitEngine?
 
+BitEngine is built on C++17, Python 3, and the liburcu development library. The testbed server must support AVX-512 instructions. Most modern processors from Intel and AMD are compatible; however, if you are using a laptop, please verify that your processor supports AVX-512.
+
 1) Please compile the bitmap index used in the project.
 
 ```sh
